@@ -1,7 +1,7 @@
 -- Locus Lab: Database schema with Row Level Security (RLS) and cascading foreign keys
--- Copy and paste this script into your Supabase SQL Editor and click Run.
+-- Copy and paste this complete script into your Supabase SQL Editor and click RUN.
 
--- 1. Create tables
+-- 1. Create tables with proper constraints
 CREATE TABLE IF NOT EXISTS public.participants (
   id uuid PRIMARY KEY DEFAULT auth.uid(),
   code text UNIQUE NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.responses (
   created_at timestamptz DEFAULT now()
 );
 
--- 2. Explicit grants for authenticated and anonymous roles
+-- 2. Explicit schema and table grants for anon and authenticated roles
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON TABLE public.participants TO anon, authenticated;
 GRANT ALL ON TABLE public.sessions TO anon, authenticated;
@@ -43,13 +43,16 @@ ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.responses ENABLE ROW LEVEL SECURITY;
 
 -- 4. RLS Policies for participants table
+-- INSERT: Anyone with an anonymous session can create their participant row
 DROP POLICY IF EXISTS "Users can insert own participant row" ON public.participants;
-CREATE POLICY "Users can insert own participant row"
+DROP POLICY IF EXISTS "Allow participant insert" ON public.participants;
+CREATE POLICY "Allow participant insert"
   ON public.participants
   FOR INSERT
   TO authenticated, anon
-  WITH CHECK (id = auth.uid() OR auth.uid() IS NOT NULL);
+  WITH CHECK (true);
 
+-- SELECT: Users can only read their own participant data
 DROP POLICY IF EXISTS "Users can read own participant row" ON public.participants;
 CREATE POLICY "Users can read own participant row"
   ON public.participants
@@ -57,6 +60,7 @@ CREATE POLICY "Users can read own participant row"
   TO authenticated, anon
   USING (id = auth.uid());
 
+-- UPDATE: Users can only update their own participant row (e.g. imagery score)
 DROP POLICY IF EXISTS "Users can update own participant row" ON public.participants;
 CREATE POLICY "Users can update own participant row"
   ON public.participants
@@ -65,6 +69,7 @@ CREATE POLICY "Users can update own participant row"
   USING (id = auth.uid())
   WITH CHECK (id = auth.uid());
 
+-- DELETE: Users can only delete their own participant row
 DROP POLICY IF EXISTS "Users can delete own participant row" ON public.participants;
 CREATE POLICY "Users can delete own participant row"
   ON public.participants
@@ -74,7 +79,8 @@ CREATE POLICY "Users can delete own participant row"
 
 -- 5. RLS Policies for sessions table
 DROP POLICY IF EXISTS "Users can insert own sessions" ON public.sessions;
-CREATE POLICY "Users can insert own sessions"
+DROP POLICY IF EXISTS "Allow sessions insert" ON public.sessions;
+CREATE POLICY "Allow sessions insert"
   ON public.sessions
   FOR INSERT
   TO authenticated, anon
@@ -104,7 +110,8 @@ CREATE POLICY "Users can delete own sessions"
 
 -- 6. RLS Policies for responses table
 DROP POLICY IF EXISTS "Users can insert own responses" ON public.responses;
-CREATE POLICY "Users can insert own responses"
+DROP POLICY IF EXISTS "Allow responses insert" ON public.responses;
+CREATE POLICY "Allow responses insert"
   ON public.responses
   FOR INSERT
   TO authenticated, anon

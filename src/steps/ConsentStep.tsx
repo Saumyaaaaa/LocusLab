@@ -25,26 +25,26 @@ export const ConsentStep: React.FC = () => {
     try {
       if (!isSupabaseConfigured) {
         throw new Error(
-          'Supabase credentials are not configured. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'
+          'Supabase environment variables are missing. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file and restart Vite.'
         );
       }
 
-      // Step 1: Sign in anonymously or retrieve existing session
+      // Step 1: Sign in anonymously (or retrieve active session)
       const authData = await signInAnonymousParticipant();
       const userId = authData?.user?.id;
 
       if (!userId) {
-        throw new Error('Unable to create an anonymous session. Please check your network connection.');
+        throw new Error('Could not establish an anonymous session. Please check your internet connection.');
       }
 
-      // Step 2: Check if this participant record already exists from a previous session
-      const { data: existingParticipant, error: checkError } = await supabase
+      // Step 2: Check if this participant already has a record in the database
+      const { data: existingParticipant } = await supabase
         .from('participants')
         .select('id, code')
         .eq('id', userId)
         .maybeSingle();
 
-      if (!checkError && existingParticipant?.code) {
+      if (existingParticipant?.code) {
         setParticipant(userId, existingParticipant.code);
         setCodeGenerated(true);
         return;
@@ -53,7 +53,7 @@ export const ConsentStep: React.FC = () => {
       // Step 3: Generate unbiased 8-character code
       const newCode = generateParticipantCode(8);
 
-      // Step 4: Insert participant row with strict RLS
+      // Step 4: Insert participant row into Supabase
       const { error: insertError } = await supabase
         .from('participants')
         .insert({
@@ -62,18 +62,12 @@ export const ConsentStep: React.FC = () => {
         });
 
       if (insertError) {
-        // Safe, privacy-preserving error message without leaking sensitive strings
-        if (insertError.message.toLowerCase().includes('violates row-level security')) {
-          throw new Error(
-            'Database setup required: Please run or re-run schema.sql in your Supabase SQL Editor so the Row Level Security (RLS) policies are active.'
-          );
-        }
         throw new Error(
-          'Unable to save participant to the database. Please verify schema.sql has been executed in your Supabase project.'
+          'Could not save participant record. Please make sure you have run the updated schema.sql in your Supabase SQL Editor.'
         );
       }
 
-      // Step 5: Update store and show code on screen (no separate localStorage)
+      // Step 5: Update store and show code on screen
       setParticipant(userId, newCode);
       setCodeGenerated(true);
     } catch (err: unknown) {

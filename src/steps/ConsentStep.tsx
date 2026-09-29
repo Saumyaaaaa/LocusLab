@@ -24,24 +24,36 @@ export const ConsentStep: React.FC = () => {
 
     try {
       if (!isSupabaseConfigured) {
-        // Helpful diagnostic when .env is not yet configured by the user
         throw new Error(
-          'Supabase environment variables (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY) are not configured in your .env file yet. Please configure them to connect to your project.'
+          'Supabase credentials are not configured. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'
         );
       }
 
-      // Step 1: Sign in anonymously
+      // Step 1: Sign in anonymously or retrieve existing session
       const authData = await signInAnonymousParticipant();
       const userId = authData?.user?.id;
 
       if (!userId) {
-        throw new Error('Could not obtain an anonymous user ID from Supabase.');
+        throw new Error('Unable to create an anonymous session. Please check your network connection.');
       }
 
-      // Step 2: Generate unbiased 8-character code
+      // Step 2: Check if this participant record already exists from a previous session
+      const { data: existingParticipant, error: checkError } = await supabase
+        .from('participants')
+        .select('id, code')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!checkError && existingParticipant?.code) {
+        setParticipant(userId, existingParticipant.code);
+        setCodeGenerated(true);
+        return;
+      }
+
+      // Step 3: Generate unbiased 8-character code
       const newCode = generateParticipantCode(8);
 
-      // Step 3: Insert participant row with strict RLS (id = auth.uid())
+      // Step 4: Insert participant row with strict RLS
       const { error: insertError } = await supabase
         .from('participants')
         .insert({
@@ -50,14 +62,22 @@ export const ConsentStep: React.FC = () => {
         });
 
       if (insertError) {
-        throw new Error(`Database error creating participant record: ${insertError.message}`);
+        // Safe, privacy-preserving error message without leaking sensitive strings
+        if (insertError.message.toLowerCase().includes('violates row-level security')) {
+          throw new Error(
+            'Database setup required: Please run or re-run schema.sql in your Supabase SQL Editor so the Row Level Security (RLS) policies are active.'
+          );
+        }
+        throw new Error(
+          'Unable to save participant to the database. Please verify schema.sql has been executed in your Supabase project.'
+        );
       }
 
-      // Step 4: Update store and show code on screen (no separate localStorage)
+      // Step 5: Update store and show code on screen (no separate localStorage)
       setParticipant(userId, newCode);
       setCodeGenerated(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'An unexpected error occurred during sign-in.';
+      const msg = err instanceof Error ? err.message : 'An unexpected error occurred during setup.';
       setErrorMessage(msg);
     } finally {
       setLoading(false);
@@ -181,7 +201,7 @@ export const ConsentStep: React.FC = () => {
             lineHeight: 1.6,
           }}
         >
-          <strong>Connection or Authentication Error:</strong>
+          <strong>Notice:</strong>
           <p style={{ marginTop: 'var(--space-1)' }}>{errorMessage}</p>
         </div>
       )}

@@ -1,8 +1,25 @@
-// Configures the Supabase client and provides anonymous authentication helper with detailed configuration error checks.
+// Configures the Supabase client with URL sanitization, quote stripping, and friendly diagnostic error messages.
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+function sanitizeEnvValue(val: string | undefined): string {
+  if (!val) return '';
+  let clean = val.trim();
+  // Strip surrounding quotes if present in .env
+  if (
+    (clean.startsWith('"') && clean.endsWith('"')) ||
+    (clean.startsWith("'") && clean.endsWith("'"))
+  ) {
+    clean = clean.slice(1, -1).trim();
+  }
+  // Remove trailing slashes
+  return clean.replace(/\/+$/, '');
+}
+
+const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const supabaseUrl = sanitizeEnvValue(rawUrl);
+const supabaseAnonKey = sanitizeEnvValue(rawAnonKey);
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
@@ -25,7 +42,7 @@ export const supabase = createClient(
 
 /**
  * Signs in the user anonymously using Supabase auth.
- * Throws a human-readable error if Anonymous Sign-Ins are disabled or project URL is not configured.
+ * Provides actionable diagnostics for common configuration mistakes (e.g. dashboard URL instead of API URL).
  */
 export async function signInAnonymousParticipant() {
   if (!isSupabaseConfigured) {
@@ -34,11 +51,30 @@ export async function signInAnonymousParticipant() {
     );
   }
 
+  // Common user mistake: pasting the Supabase Dashboard URL instead of the Project API URL
+  if (supabaseUrl.includes('supabase.com/dashboard')) {
+    throw new Error(
+      'Your VITE_SUPABASE_URL is set to the Supabase Dashboard page URL. Please replace it with your actual Project API URL (formatted like: https://[your-project-id].supabase.co). In Supabase, find this under Project Settings -> API -> Project URL.'
+    );
+  }
+
+  if (!supabaseUrl.startsWith('https://') && !supabaseUrl.startsWith('http://localhost')) {
+    throw new Error(
+      `Your VITE_SUPABASE_URL must start with "https://". Current value: "${supabaseUrl}". It should look like: https://[your-project-id].supabase.co`
+    );
+  }
+
   const { data, error } = await supabase.auth.signInAnonymously();
   if (error) {
-    if (error.message.toLowerCase().includes('anonymous sign-ins are disabled')) {
+    const errorLower = error.message.toLowerCase();
+    if (errorLower.includes('anonymous sign-ins are disabled')) {
       throw new Error(
-        'Anonymous Sign-Ins are not enabled in your Supabase project. In Supabase Dashboard, visit Authentication -> Providers -> Email / Anonymous and toggle "Enable Anonymous Sign-Ins" ON.'
+        'Anonymous Sign-Ins are disabled in your Supabase project. In Supabase Dashboard, go to Authentication -> Providers -> Anonymous and toggle "Enable Anonymous Sign-Ins" to ON, then click Save.'
+      );
+    }
+    if (errorLower.includes('invalid path')) {
+      throw new Error(
+        `Supabase returned "Invalid path specified in request URL". Please check your .env file: VITE_SUPABASE_URL must be strictly the base Project URL without any extra path (e.g. "https://abcdefghijklmnopqrst.supabase.co"). Found: "${supabaseUrl}".`
       );
     }
     throw error;

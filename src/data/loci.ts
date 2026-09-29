@@ -235,14 +235,14 @@ export const PALACE_LOCI: readonly LocusData[] = [
   },
   {
     id: 18,
-    name: 'Floor Speaker',
+    name: 'Clothes Wardrobe',
     room: 'Bedroom',
     position: [7.2, 0, 6.5],
     cameraPosition: [4.6, 1.4, 6.5],
-    color: '#1e293b', // Charcoal audio tower
+    color: '#78350f', // Warm timber cabinet
     shape: 'box',
-    dimensions: [0.45, 1.4, 0.4],
-    modelFile: 'speaker.glb',
+    dimensions: [0.85, 1.8, 0.55],
+    modelFile: 'bookcaseClosedDoors.glb',
     rotation: [0, -Math.PI / 2, 0],
   },
 

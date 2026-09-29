@@ -197,14 +197,14 @@ export const PALACE_LOCI: readonly LocusData[] = [
   },
   {
     id: 15,
-    name: 'Office Credenza',
+    name: 'Bear Sculpture',
     room: 'Study',
     position: [-3.0, 0, 6.8],
     cameraPosition: [-3.0, 1.45, 4.4],
-    color: '#334155', // Slate wood credenza
-    shape: 'box',
-    dimensions: [1.4, 0.6, 0.5],
-    modelFile: 'cabinetTelevisionDoors.glb',
+    color: '#92400e', // Warm carved wood
+    shape: 'furniture',
+    dimensions: [0.6, 1.5, 0.6],
+    modelFile: 'bear.glb',
     rotation: [0, Math.PI, 0],
   },
 
@@ -235,14 +235,14 @@ export const PALACE_LOCI: readonly LocusData[] = [
   },
   {
     id: 18,
-    name: 'Bedroom Dresser',
+    name: 'Floor Speaker',
     room: 'Bedroom',
     position: [7.2, 0, 6.5],
     cameraPosition: [4.6, 1.4, 6.5],
-    color: '#831843', // Deep rosewood
+    color: '#1e293b', // Charcoal audio tower
     shape: 'box',
-    dimensions: [1.0, 1.1, 0.7],
-    modelFile: 'cabinetBedDrawer.glb',
+    dimensions: [0.45, 1.4, 0.4],
+    modelFile: 'speaker.glb',
     rotation: [0, -Math.PI / 2, 0],
   },
 

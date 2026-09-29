@@ -13,12 +13,14 @@ import {
 interface PalaceHouseProps {
   activeLocusId: number;
   assignedWords: readonly string[];
+  forcePrimitiveFallback?: boolean;
   onAssetFallback?: () => void;
 }
 
 export const PalaceHouse: React.FC<PalaceHouseProps> = ({
   activeLocusId,
   assignedWords,
+  forcePrimitiveFallback = false,
   onAssetFallback,
 }) => {
   // Procedural canvas floor textures
@@ -254,6 +256,7 @@ export const PalaceHouse: React.FC<PalaceHouseProps> = ({
             locus={locus}
             isActive={isActive}
             assignedWord={assignedWord}
+            forceFallback={forcePrimitiveFallback}
             onFallback={onAssetFallback}
           />
         );

@@ -1,6 +1,6 @@
 // Primary 3D memory palace study scene with full-viewport immersion, dedicated non-overlapping word panel, and responsive camera framing.
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { PointerLockControls, useProgress } from '@react-three/drei';
 import { PALACE_LOCI, LocusData } from '../../data/loci';
 import { PalaceHouse } from './PalaceHouse';
@@ -12,6 +12,31 @@ import { DeleteDataModal } from '../DeleteDataModal';
 import { detectDeviceInfo } from '../../lib/deviceDetection';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useExperimentStore } from '../../store/useExperimentStore';
+
+interface OperationalFrameTrackerProps {
+  assetsReady: boolean;
+  onFirstOperationalFrame: () => void;
+}
+
+/**
+ * Tracks the very first animation frame rendered strictly AFTER assets are ready
+ * (all GLBs loaded or 20s timeout triggered).
+ */
+const OperationalFrameTracker: React.FC<OperationalFrameTrackerProps> = ({
+  assetsReady,
+  onFirstOperationalFrame,
+}) => {
+  const triggeredRef = useRef(false);
+
+  useFrame(() => {
+    if (assetsReady && !triggeredRef.current) {
+      triggeredRef.current = true;
+      onFirstOperationalFrame();
+    }
+  });
+
+  return null;
+};
 
 export interface PalaceStudyCompletionPayload {
   mode: 'guided' | 'freewalk';
@@ -29,6 +54,7 @@ interface PalaceSceneProps {
   initialLocusIdx?: number;
   cameraPositionOverride?: [number, number, number];
   cameraTargetOverride?: [number, number, number];
+  loadTimeoutMs?: number; // 20-second timeout guard
   onComplete: (metadata: PalaceStudyCompletionPayload) => void;
 }
 
@@ -38,13 +64,15 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   initialLocusIdx = 0,
   cameraPositionOverride,
   cameraTargetOverride,
+  loadTimeoutMs = 20000,
   onComplete,
 }) => {
   const { participantId } = useExperimentStore();
   const [webglSupported] = useState(() => isWebGLAvailable());
   const [useTextFallback] = useState(!webglSupported);
-  const [firstFrameRendered, setFirstFrameRendered] = useState(false);
+  const [firstOperationalFrameRendered, setFirstOperationalFrameRendered] = useState(false);
   const [assetFallbackTriggered, setAssetFallbackTriggered] = useState(false);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [activeIdx, setActiveIdx] = useState(initialLocusIdx);
   const [isFreeWalk, setIsFreeWalk] = useState(false);
   const [usedFreeWalk, setUsedFreeWalk] = useState(false);
@@ -79,7 +107,23 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   // Asset loading progress tracking
   const { active: loadingActive, progress, loaded, total } = useProgress();
   const isFullyLoaded = !loadingActive || progress === 100;
-  const isSceneOperational = firstFrameRendered && isFullyLoaded;
+
+  // 20-Second Asset Loading Timeout:
+  // If assets have not fully loaded within 20s, activate primitive fallbacks,
+  // flag palace_asset_fallback = true, and start the timer on the next operational frame.
+  useEffect(() => {
+    if (isFullyLoaded || loadTimedOut) return;
+
+    const timeoutId = setTimeout(() => {
+      setLoadTimedOut(true);
+      setAssetFallbackTriggered(true);
+    }, loadTimeoutMs);
+
+    return () => clearTimeout(timeoutId);
+  }, [isFullyLoaded, loadTimedOut, loadTimeoutMs]);
+
+  const assetsReady = isFullyLoaded || loadTimedOut;
+  const isSceneOperational = firstOperationalFrameRendered;
 
   // Record device covariates once operational
   const covariatesRecordedRef = useRef(false);
@@ -209,7 +253,7 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
       mode: usedFreeWalk ? 'freewalk' : 'guided',
       tabHidden,
       webglFallback: false,
-      palaceAssetFallback: assetFallbackTriggered,
+      palaceAssetFallback: assetFallbackTriggered || loadTimedOut,
       visitsByLocus: visitsByLocusRef.current,
       dwellMsByLocus: dwellMsByLocusRef.current,
       totalVisits,
@@ -534,7 +578,14 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
             <PalaceHouse
               activeLocusId={currentLocus.id}
               assignedWords={assignedWords}
+              forcePrimitiveFallback={assetFallbackTriggered || loadTimedOut}
               onAssetFallback={() => setAssetFallbackTriggered(true)}
+            />
+
+            {/* Operational Frame Tracker: starts on first useFrame strictly AFTER assetsReady */}
+            <OperationalFrameTracker
+              assetsReady={assetsReady}
+              onFirstOperationalFrame={() => setFirstOperationalFrameRendered(true)}
             />
 
             {/* Guided Tour Camera or Optional Free-Walk */}
@@ -544,7 +595,6 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
                 recenterTrigger={recenterTrigger}
                 cameraPositionOverride={cameraPositionOverride}
                 cameraTargetOverride={cameraTargetOverride}
-                onFirstFrameRendered={() => setFirstFrameRendered(true)}
               />
             ) : (
               <PointerLockControls />

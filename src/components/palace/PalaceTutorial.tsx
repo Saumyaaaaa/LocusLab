@@ -15,8 +15,8 @@ const DEMO_PRACTICE_ITEMS = [
   {
     locusName: 'Entry Vestibule',
     room: 'Hallway',
-    demoWord: 'SUNFLOWER',
-    prompt: 'Imagine giant 8-foot sunflowers bursting through the floor tiles, dropping golden seeds everywhere.',
+    demoWord: 'TELESCOPE',
+    prompt: 'Imagine a giant brass telescope spinning wildly on the floor tiles, shooting bright star beams at the ceiling.',
   },
 ];
 

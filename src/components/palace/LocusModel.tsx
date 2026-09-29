@@ -53,6 +53,8 @@ interface GLBModelProps {
 const GLBModel: React.FC<GLBModelProps> = ({ modelFile, isActive, dimensions }) => {
   const { scene } = useGLTF(`/models/${modelFile}`);
 
+  const isBearSculpture = modelFile === 'bear.glb';
+
   // Clone scene so multiple loci or shared meshes do not conflict
   const cloned = useMemo(() => {
     const clone = scene.clone(true);
@@ -70,22 +72,35 @@ const GLBModel: React.FC<GLBModelProps> = ({ modelFile, isActive, dimensions }) 
     const size = new THREE.Vector3();
     box.getSize(size);
 
-    // 2. Uniform scale so the largest dimension matches target dimension
-    if (size.x > 0 && size.y > 0 && size.z > 0) {
-      const maxTargetDim = Math.max(...dimensions);
-      const maxModelDim = Math.max(size.x, size.y, size.z);
-      if (maxModelDim > 0) {
-        const scale = maxTargetDim / maxModelDim;
-        clone.scale.set(scale, scale, scale);
+    if (isBearSculpture) {
+      // Scale bear head sculpture to ~0.7m width
+      const scale = 0.75 / (Math.max(size.x, size.y) || 1);
+      clone.scale.set(scale, scale, scale);
+
+      // Center horizontally and ground at top of pedestal (y = 0.85m)
+      const scaledBox = new THREE.Box3().setFromObject(clone);
+      const center = scaledBox.getCenter(new THREE.Vector3());
+      clone.position.x = -center.x;
+      clone.position.y = 0.85 - scaledBox.min.y;
+      clone.position.z = -center.z;
+    } else {
+      // 2. Uniform scale so the largest dimension matches target dimension
+      if (size.x > 0 && size.y > 0 && size.z > 0) {
+        const maxTargetDim = Math.max(...dimensions);
+        const maxModelDim = Math.max(size.x, size.y, size.z);
+        if (maxModelDim > 0) {
+          const scale = maxTargetDim / maxModelDim;
+          clone.scale.set(scale, scale, scale);
+        }
       }
+
+      // 3. Grounding: offset model so its lowest vertex sits at y = 0
+      const scaledBox = new THREE.Box3().setFromObject(clone);
+      clone.position.y = -scaledBox.min.y;
     }
 
-    // 3. Grounding: offset model so its lowest vertex sits at y = 0
-    const scaledBox = new THREE.Box3().setFromObject(clone);
-    clone.position.y = -scaledBox.min.y;
-
     return clone;
-  }, [scene, dimensions]);
+  }, [scene, dimensions, isBearSculpture]);
 
   // Apply subtle active highlight emissive tint
   useEffect(() => {
@@ -105,6 +120,24 @@ const GLBModel: React.FC<GLBModelProps> = ({ modelFile, isActive, dimensions }) 
     }
   }, [cloned, isActive]);
 
+  if (isBearSculpture) {
+    return (
+      <group>
+        {/* Gallery column display pedestal */}
+        <mesh position={[0, 0.425, 0]}>
+          <boxGeometry args={[0.42, 0.85, 0.42]} />
+          <meshStandardMaterial color="#334155" roughness={0.7} metalness={0.1} />
+        </mesh>
+        {/* Gallery pedestal upper molding cap */}
+        <mesh position={[0, 0.86, 0]}>
+          <boxGeometry args={[0.48, 0.03, 0.48]} />
+          <meshStandardMaterial color="#475569" roughness={0.6} metalness={0.15} />
+        </mesh>
+        <primitive object={cloned} />
+      </group>
+    );
+  }
+
   return <primitive object={cloned} />;
 };
 
@@ -112,6 +145,7 @@ interface LocusModelProps {
   locus: LocusData;
   isActive: boolean;
   assignedWord: string;
+  forceFallback?: boolean;
   onFallback?: () => void;
 }
 
@@ -119,13 +153,14 @@ interface LocusModelProps {
  * Primary Locus component:
  * 1. Renders grounding blob shadow
  * 2. Attempts to load CC0 .glb model inside ErrorBoundary + Suspense
- * 3. Falls back immediately to clean primitive shape if .glb is absent or fails
+ * 3. Falls back immediately to clean primitive shape if .glb is absent, fails, or timed out
  * 4. Renders active glowing floor ring and floating HUD badge
  */
 export const LocusModel: React.FC<LocusModelProps> = ({
   locus,
   isActive,
   assignedWord: _assignedWord,
+  forceFallback = false,
   onFallback,
 }) => {
   // Height and bounding radius for shadows and markers
@@ -180,21 +215,24 @@ export const LocusModel: React.FC<LocusModelProps> = ({
       )}
 
       {/* 3. 3D Model with Error Boundary and Primitive Fallback */}
-      <LocusModelErrorBoundary
-        fallback={primitiveFallback}
-        onError={() => {
-          if (onFallback) onFallback();
-        }}
-      >
-        <Suspense fallback={primitiveFallback}>
-          <GLBModel
-            modelFile={locus.modelFile}
-            isActive={isActive}
-            dimensions={locus.dimensions}
-          />
-        </Suspense>
-      </LocusModelErrorBoundary>
-
+      {forceFallback ? (
+        primitiveFallback
+      ) : (
+        <LocusModelErrorBoundary
+          fallback={primitiveFallback}
+          onError={() => {
+            if (onFallback) onFallback();
+          }}
+        >
+          <Suspense fallback={primitiveFallback}>
+            <GLBModel
+              modelFile={locus.modelFile}
+              isActive={isActive}
+              dimensions={locus.dimensions}
+            />
+          </Suspense>
+        </LocusModelErrorBoundary>
+      )}
     </group>
   );
 };

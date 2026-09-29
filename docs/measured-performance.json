@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Desktop (1920x1080, Native 1x CPU)",
+    "width": 1920,
+    "height": 1080,
+    "mobile": false,
+    "cpuThrottlingRate": 1,
+    "loadTimeMs": 2345,
+    "avgFps": 60,
+    "minFps": 48.5,
+    "avgFrameMs": 16.65,
+    "p95FrameMs": 18.1,
+    "p99FrameMs": 20.6,
+    "samples": 98
+  },
+  {
+    "name": "Mobile Emulation (390x844, 4x CPU Throttling)",
+    "width": 390,
+    "height": 844,
+    "mobile": true,
+    "cpuThrottlingRate": 4,
+    "loadTimeMs": 3340,
+    "avgFps": 55.4,
+    "minFps": 10.3,
+    "avgFrameMs": 18.04,
+    "p95FrameMs": 25.9,
+    "p99FrameMs": 97.2,
+    "samples": 98
+  }
+]

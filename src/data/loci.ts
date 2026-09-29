@@ -41,8 +41,8 @@ export const PALACE_LOCI: readonly LocusData[] = [
     cameraPosition: [-0.4, 1.4, -11.0],
     color: '#a16207', // Light wood
     shape: 'box',
-    dimensions: [1.4, 0.6, 0.7],
-    modelFile: 'benchCushionLow.glb',
+    dimensions: [1.4, 0.7, 0.7],
+    modelFile: 'bench.glb',
     rotation: [0, -Math.PI / 2, 0],
   },
   {
@@ -130,7 +130,7 @@ export const PALACE_LOCI: readonly LocusData[] = [
     color: '#cbd5e1', // Stainless steel silver
     shape: 'box',
     dimensions: [1.0, 2.2, 0.9],
-    modelFile: 'kitchenFridgeLarge.glb',
+    modelFile: 'kitchenFridge.glb',
     rotation: [0, -Math.PI / 2, 0],
   },
   {
@@ -173,26 +173,26 @@ export const PALACE_LOCI: readonly LocusData[] = [
   },
   {
     id: 13,
-    name: 'Desk Chair',
+    name: 'Study Chair',
     room: 'Study',
     position: [-5.0, 0, 3.5],
     cameraPosition: [-2.6, 1.4, 3.5],
     color: '#059669', // Emerald green leather
     shape: 'cylinder',
     dimensions: [0.75, 1.0, 0.75],
-    modelFile: 'chairDesk.glb',
+    modelFile: 'chairRounded.glb',
     rotation: [0, -Math.PI / 2, 0],
   },
   {
     id: 14,
-    name: 'Storage Box',
+    name: 'Open Storage Crate',
     room: 'Study',
     position: [-7.2, 0, 6.0],
     cameraPosition: [-4.6, 1.4, 6.0],
     color: '#b45309', // Cardboard brown
     shape: 'box',
     dimensions: [0.8, 0.8, 0.8],
-    modelFile: 'cardboardBoxClosed.glb',
+    modelFile: 'cardboardBoxOpen.glb',
     rotation: [0, 0, 0],
   },
   {

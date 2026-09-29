@@ -31,54 +31,42 @@ export function getWoodPlankTexture(
     ctx.fillStyle = baseColor;
     ctx.fillRect(0, 0, 512, 512);
 
-    const rows = 8;
-    const cols = 4;
-    const rowHeight = 512 / rows;
-    const colWidth = 512 / cols;
+    // Render continuous longitudinal hardwood floorboards (vertical tongue-and-groove boards)
+    // No horizontal staggered seams, guaranteeing zero resemblance to brick masonry or fences.
+    const numBoards = 8;
+    const boardWidth = 512 / numBoards;
 
-    for (let r = 0; r < rows; r++) {
-      const offset = (r % 2) * (colWidth / 2);
-      for (let c = -1; c <= cols; c++) {
-        const x = c * colWidth + offset;
-        const y = r * rowHeight;
+    for (let b = 0; b < numBoards; b++) {
+      const x = b * boardWidth;
+      const shadeOffset = ((b * 17) % 11) - 5;
+      ctx.fillStyle = shadeOffset > 0 ? baseColor : plankColor;
+      ctx.fillRect(x + 1, 0, boardWidth - 2, 512);
 
-        // Individual plank color variation
-        const shadeVariation = ((r * 13 + c * 7) % 15) - 7;
-        ctx.fillStyle = shadeVariation > 0 ? baseColor : plankColor;
-        ctx.fillRect(x + 1, y + 1, colWidth - 2, rowHeight - 2);
-
-        // Subtle wood grain lines
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 1;
+      // Fine parallel wood grain lines along board length
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 0.75;
+      for (let g = 0; g < 3; g++) {
+        const gx = x + (boardWidth * (g + 1)) / 4;
         ctx.beginPath();
-        ctx.moveTo(x, y + rowHeight / 3);
+        ctx.moveTo(gx, 0);
         ctx.bezierCurveTo(
-          x + colWidth * 0.3,
-          y + rowHeight / 3 + 2,
-          x + colWidth * 0.7,
-          y + rowHeight / 3 - 2,
-          x + colWidth,
-          y + rowHeight / 3
+          gx + ((g % 2 === 0 ? 2 : -2)),
+          170,
+          gx - ((g % 2 === 0 ? 2 : -2)),
+          340,
+          gx,
+          512
         );
         ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(x, y + (rowHeight * 2) / 3);
-        ctx.bezierCurveTo(
-          x + colWidth * 0.4,
-          y + (rowHeight * 2) / 3 - 3,
-          x + colWidth * 0.6,
-          y + (rowHeight * 2) / 3 + 3,
-          x + colWidth,
-          y + (rowHeight * 2) / 3
-        );
-        ctx.stroke();
-
-        // Dark bevel borders around planks
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, colWidth, rowHeight);
       }
+
+      // Clean longitudinal board seam
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, 512);
+      ctx.stroke();
     }
   }
 

@@ -1,13 +1,9 @@
 // Standalone guided tour viewer component for inspecting and capturing locus screenshots in DEV mode.
 import React from 'react';
 import { PalaceScene } from './PalaceScene';
+import { LIST_A } from '../../data/lists';
 
-const SAMPLE_WORDS = [
-  'HARBOR', 'TIMBER', 'GARDEN', 'VALLEY', 'MEADOW',
-  'SILVER', 'DESERT', 'FOREST', 'STREAM', 'CASTLE',
-  'BRIDGE', 'CANYON', 'ISLAND', 'TEMPLE', 'SUMMIT',
-  'PALACE', 'VILLAGE', 'GLACIER', 'HORIZON', 'STATUE'
-];
+const REAL_WORDS = LIST_A.map((item) => item.word.toUpperCase());
 
 export const PalaceTourViewer: React.FC = () => {
   const params = new URLSearchParams(window.location.search);
@@ -34,7 +30,7 @@ export const PalaceTourViewer: React.FC = () => {
 
   return (
     <PalaceScene
-      assignedWords={SAMPLE_WORDS}
+      assignedWords={REAL_WORDS}
       initialLocusIdx={initialLocusIdx}
       cameraPositionOverride={cameraPositionOverride}
       cameraTargetOverride={cameraTargetOverride}

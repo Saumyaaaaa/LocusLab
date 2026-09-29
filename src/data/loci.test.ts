@@ -78,9 +78,33 @@ describe('PALACE_LOCI naming integrity and scene manifest', () => {
     }
   });
 
-  it('verifies zero stimuli word collisions across every node, mesh, and material in all 20 GLB files', () => {
+  it('fails if the audit list is not identical to [...LIST_A, ...LIST_B] from src/data/lists.ts', () => {
+    const expectedWords = [...LIST_A, ...LIST_B].map((w) => w.word.toLowerCase());
+    expect(allStimuliWords).toEqual(expectedWords);
+    expect(allStimuliWords).toHaveLength(40);
+  });
+
+  it('verifies zero stimuli word or semantic synonym collisions across every node, mesh, and material in all 20 GLB files', () => {
     const modelsDir = path.resolve(process.cwd(), 'public/models');
     const violations: string[] = [];
+
+    const semanticSynonyms: Record<string, string[]> = {
+      wheel: ['wheel', 'caster', 'castor'],
+      button: ['button', 'knob', 'dial', 'pushbutton'],
+      clock: ['clock', 'timer', 'watch'],
+      plate: ['plate', 'nameplate', 'plaque'],
+      lamp: ['lamp', 'lantern', 'sconce'],
+      bottle: ['bottle', 'flask', 'vial'],
+      vase: ['vase', 'urn'],
+      brick: ['brick', 'masonry'],
+      fence: ['fence', 'railing'],
+      plant: ['plant', 'flower', 'foliage'],
+      rope: ['rope', 'cord'],
+      ribbon: ['ribbon', 'bow'],
+      pillow: ['pillow', 'cushion'],
+      basket: ['basket', 'hamper'],
+      mirror: ['mirror'],
+    };
 
     for (const locus of PALACE_LOCI) {
       const filePath = path.join(modelsDir, locus.modelFile);
@@ -97,12 +121,23 @@ describe('PALACE_LOCI naming integrity and scene manifest', () => {
 
         for (const token of allNames) {
           const lower = token.toLowerCase();
+          // Check against 40 stimuli words
           for (const w of allStimuliWords) {
-            // Check exact word or substring
             if (lower === w || lower.includes(w)) {
               violations.push(
                 `Model "${locus.modelFile}" (Locus #${locus.id} ${locus.name}) has element "${token}" containing stimulus word "${w}"`
               );
+            }
+          }
+
+          // Check against semantic synonyms
+          for (const [targetWord, syns] of Object.entries(semanticSynonyms)) {
+            for (const syn of syns) {
+              if (lower.includes(syn)) {
+                violations.push(
+                  `Model "${locus.modelFile}" (Locus #${locus.id} ${locus.name}) has element "${token}" matching semantic synonym "${syn}" for "${targetWord}"`
+                );
+              }
             }
           }
         }

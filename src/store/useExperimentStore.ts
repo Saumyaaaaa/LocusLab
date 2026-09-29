@@ -1,4 +1,4 @@
-// Zustand state machine managing the sequential progression of steps through the Locus Lab experiment.
+// Zustand state machine managing the sequential experiment progression, participant state, and imagery responses.
 import { create } from 'zustand';
 
 export type ExperimentStep =
@@ -44,14 +44,32 @@ export const STEP_LABELS: Record<ExperimentStep, string> = {
 
 interface ExperimentState {
   currentStep: ExperimentStep;
+  participantId: string | null;
+  participantCode: string | null;
+  imageryRatings: Record<number, number>;
+  imageryScore: number | null;
+  errorMessage: string | null;
+  isSubmitting: boolean;
+
   setStep: (step: ExperimentStep) => void;
   nextStep: () => void;
   prevStep: () => void;
+  setParticipant: (id: string, code: string) => void;
+  setImageryRating: (questionId: number, rating: number) => void;
+  setImageryScore: (score: number) => void;
+  setErrorMessage: (msg: string | null) => void;
+  setIsSubmitting: (val: boolean) => void;
   reset: () => void;
 }
 
 export const useExperimentStore = create<ExperimentState>((set, get) => ({
   currentStep: 'landing',
+  participantId: null,
+  participantCode: null,
+  imageryRatings: {},
+  imageryScore: null,
+  errorMessage: null,
+  isSubmitting: false,
 
   setStep: (step: ExperimentStep) => set({ currentStep: step }),
 
@@ -59,7 +77,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     const { currentStep } = get();
     const currentIndex = EXPERIMENT_STEPS.indexOf(currentStep);
     if (currentIndex < EXPERIMENT_STEPS.length - 1) {
-      set({ currentStep: EXPERIMENT_STEPS[currentIndex + 1] });
+      set({ currentStep: EXPERIMENT_STEPS[currentIndex + 1], errorMessage: null });
     }
   },
 
@@ -67,9 +85,32 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     const { currentStep } = get();
     const currentIndex = EXPERIMENT_STEPS.indexOf(currentStep);
     if (currentIndex > 0) {
-      set({ currentStep: EXPERIMENT_STEPS[currentIndex - 1] });
+      set({ currentStep: EXPERIMENT_STEPS[currentIndex - 1], errorMessage: null });
     }
   },
 
-  reset: () => set({ currentStep: 'landing' }),
+  setParticipant: (id: string, code: string) =>
+    set({ participantId: id, participantCode: code }),
+
+  setImageryRating: (questionId: number, rating: number) =>
+    set((state) => ({
+      imageryRatings: { ...state.imageryRatings, [questionId]: rating },
+    })),
+
+  setImageryScore: (score: number) => set({ imageryScore: score }),
+
+  setErrorMessage: (msg: string | null) => set({ errorMessage: msg }),
+
+  setIsSubmitting: (val: boolean) => set({ isSubmitting: val }),
+
+  reset: () =>
+    set({
+      currentStep: 'landing',
+      participantId: null,
+      participantCode: null,
+      imageryRatings: {},
+      imageryScore: null,
+      errorMessage: null,
+      isSubmitting: false,
+    }),
 }));

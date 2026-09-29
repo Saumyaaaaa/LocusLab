@@ -66,21 +66,58 @@ To verify that participant data is strictly isolated and immune to tampering, pe
 - `palace_tab_hidden` (bool): `true` if browser tab lost visibility during 3D palace study.
 - `session_interrupted` (bool): `true` if user refreshed during a timed study or recall phase.
 - `study_completed_at` (timestamptz): Timestamp when Session 1 study completed.
+- `session_completed_at` (timestamptz): Timestamp when immediate test finished (Session 1 finish).
 
 ### `sessions` Table
 - `id` (uuid, PK): Session UUID.
 - `participant_id` (uuid, FK $\to$ participants.id, Cascade Delete).
-- `phase` (text): Study phase (`'immediate'`, `'24h'`, `'7d'`).
+- `phase` (text): Study phase (`'immediateTest'`, `'24h'`, `'7d'`).
 - `started_at` (timestamptz): When session began.
 - `completed_at` (timestamptz): When session ended.
+- `late` (bool): `true` if return test was taken in the late window (24h: 48h–72h, 7d: 10d–14d).
+- `start_hour` (int): Local hour of day (0–23) when test started for circadian analysis.
+- `session_interrupted` (bool): `true` if participant refreshed or left mid-test.
 
 ### `responses` Table
 - `id` (uuid, PK): Response entry UUID.
 - `participant_id` (uuid, FK $\to$ participants.id, Cascade Delete).
-- `phase` (text): `'immediate'`, `'24h'`, or `'7d'`.
+- `phase` (text): `'immediateTest'`, `'24h'`, or `'7d'`.
 - `list_id` (text): `'listA'` or `'listB'`.
 - `condition` (text): `'palace'` or `'flashcard'`.
 - `item_index` (int): 0 through 19 for target stimuli words; `-1` for intrusions/unmatched entries.
 - `typed_answer` (text, nullable): Exact typed text (null if word was missed).
-- `correct` (bool): `true` if recalled correctly within 1-char Levenshtein tolerance (5+ letter words).
+- `correct` (bool): `true` if recalled correctly within length-gated Levenshtein tolerance.
 - `response_ms` (int, nullable): Latency from start of list test to response submission.
+- `tab_hidden` (bool): `true` if user switched away from the browser tab during the test.
+- `intrusion_seq` (int): `0` for target stimulus rows; `1, 2, ...` for intrusions to ensure idempotent upsert without duplicates.
+
+---
+
+## 🕒 Return Test Timing & Dev-Only Simulation Guide
+
+### Test Timing Windows (Measured from `session_completed_at`)
+- **24-Hour Test Window**:
+  - `0h to <22h`: Window early (friendly countdown displayed).
+  - `22h to 48h`: Open on-time (`late = false`).
+  - `48h to 72h`: Open late window (`late = true`).
+  - `>72h`: Window closed. (Skipping 24h does **not** block 7d!).
+- **7-Day Test Window**:
+  - `<156h` (6.5 days): Window early (friendly countdown displayed).
+  - `156h to 240h` (6.5d to 10d): Open on-time (`late = false`).
+  - `240h to 336h` (10d to 14d): Open late window (`late = true`).
+  - `>336h`: Window closed.
+
+### How to Simulate Elapsed Time During Development
+In development mode (`npm run dev`), you do not need to wait 24 hours or 7 days to test the return windows:
+1. Append `&simElapsedHours=XX` to the return URL:
+   - Early 24h countdown: `/return?code=XXXX&simElapsedHours=5`
+   - On-time 24h test: `/return?code=XXXX&simElapsedHours=23`
+   - Late 24h test: `/return?code=XXXX&simElapsedHours=50`
+   - Closed 24h / Early 7d countdown: `/return?code=XXXX&simElapsedHours=75`
+   - On-time 7d test: `/return?code=XXXX&simElapsedHours=160`
+   - Late 7d test: `/return?code=XXXX&simElapsedHours=250`
+   - Closed 7d test: `/return?code=XXXX&simElapsedHours=350`
+2. Or use the built-in **Dev Time Simulator toolbar** that renders at the bottom of the `/return` screen in `npm run dev`.
+
+> [!IMPORTANT]
+> **Zero Production Backdoor**: The simulation code is guarded by Vite's `import.meta.env.DEV`. When building for production (`npm run build`), the compiler statically replaces `import.meta.env.DEV` with `false`, and the minifier strips the entire simulator and URL parameter handler from the production bundle as dead code.

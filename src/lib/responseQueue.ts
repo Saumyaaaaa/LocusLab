@@ -12,6 +12,8 @@ export interface FormattedResponseRow {
   typed_answer: string | null;
   correct: boolean;
   response_ms: number | null;
+  tab_hidden: boolean;
+  intrusion_seq: number;
 }
 
 /**
@@ -59,6 +61,8 @@ export function formatListRecallRows(
         typed_answer: match.typed,
         correct: true,
         response_ms: match.responseMs,
+        tab_hidden: Boolean(payload.tabHidden),
+        intrusion_seq: 0,
       });
     } else {
       // Missed word: typed_answer is null, correct is false
@@ -71,12 +75,14 @@ export function formatListRecallRows(
         typed_answer: null,
         correct: false,
         response_ms: null,
+        tab_hidden: Boolean(payload.tabHidden),
+        intrusion_seq: 0,
       });
     }
   });
 
-  // 2. Extra typed entries (intrusions/unmatched guesses) saved with item_index = -1
-  intrusionResponses.forEach((intrusion) => {
+  // 2. Extra typed entries (intrusions/unmatched guesses) saved with item_index = -1 and positive intrusion_seq
+  intrusionResponses.forEach((intrusion, idx) => {
     rows.push({
       participant_id: participantId,
       phase: payload.phase,
@@ -86,6 +92,8 @@ export function formatListRecallRows(
       typed_answer: intrusion.typed,
       correct: false,
       response_ms: intrusion.responseMs,
+      tab_hidden: Boolean(payload.tabHidden),
+      intrusion_seq: idx + 1,
     });
   });
 
@@ -93,7 +101,7 @@ export function formatListRecallRows(
 }
 
 /**
- * Saves rows to Supabase with automatic retry on failure.
+ * Saves rows to Supabase via idempotent upsert with automatic retry on failure.
  */
 export async function saveResponsesWithRetry(
   rows: FormattedResponseRow[],
@@ -106,7 +114,9 @@ export async function saveResponsesWithRetry(
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
-      const { error } = await supabase.from('responses').insert(rows);
+      const { error } = await supabase
+        .from('responses')
+        .upsert(rows, { onConflict: 'participant_id,phase,list_id,item_index,intrusion_seq' });
       if (!error) {
         return { success: true };
       }

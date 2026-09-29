@@ -48,8 +48,11 @@ export const ImmediateTestStep: React.FC = () => {
       // Advance to second list
       setCurrentTestList(secondList);
     } else {
-      // Both tests completed! Record study completion metrics on participant row in Supabase
+      // Both tests completed! Record study & session completion metrics in Supabase and store
       const nowIso = new Date().toISOString();
+      const { setSessionCompletedAt } = useExperimentStore.getState();
+      setSessionCompletedAt(nowIso);
+
       if (participantId && isSupabaseConfigured) {
         await supabase
           .from('participants')
@@ -60,8 +63,24 @@ export const ImmediateTestStep: React.FC = () => {
             flashcard_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_flashcards'] || tabHiddenByPhase['studySecond_flashcards']),
             palace_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_palace'] || tabHiddenByPhase['studySecond_palace']),
             study_completed_at: nowIso,
+            session_completed_at: nowIso,
           })
           .eq('id', participantId);
+
+        // Record immediateTest completion in sessions table
+        await supabase
+          .from('sessions')
+          .upsert(
+            {
+              participant_id: participantId,
+              phase: 'immediateTest',
+              started_at: nowIso,
+              completed_at: nowIso,
+              start_hour: new Date().getHours(),
+              late: false,
+            },
+            { onConflict: 'participant_id,phase' }
+          );
       }
       nextStep();
     }

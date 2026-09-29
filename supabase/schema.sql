@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.responses (
   created_at timestamptz DEFAULT now()
 );
 
--- 2. Non-destructive migrations (ALTER TABLE for Prompt 5 analysis columns)
+-- 2. Non-destructive migrations (ALTER TABLE for Prompt 5 & Prompt 6 analysis columns)
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS palace_mode text;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS tutorial_ms int;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS webgl_fallback bool DEFAULT false;
@@ -41,8 +41,15 @@ ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS word_order jsonb;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS study_completed_at timestamptz;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS session_interrupted bool DEFAULT false;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS immediate_test_order text;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS session_completed_at timestamptz;
+
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS late bool DEFAULT false;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS start_hour int;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS session_interrupted bool DEFAULT false;
 
 ALTER TABLE public.responses ADD COLUMN IF NOT EXISTS condition text;
+ALTER TABLE public.responses ADD COLUMN IF NOT EXISTS tab_hidden bool DEFAULT false;
+ALTER TABLE public.responses ADD COLUMN IF NOT EXISTS intrusion_seq int DEFAULT 0;
 ALTER TABLE public.responses ALTER COLUMN typed_answer DROP NOT NULL;
 
 -- 3. Grants strictly limited to authenticated role (no anon data table grants)
@@ -150,10 +157,26 @@ CREATE POLICY "Users can delete own responses"
   TO authenticated
   USING (participant_id = auth.uid());
 
--- 8. Indexes for performant lookup
+-- 8. Indexes for performant lookup & idempotent upserts
 CREATE INDEX IF NOT EXISTS idx_participants_code ON public.participants(code);
 CREATE INDEX IF NOT EXISTS idx_sessions_participant ON public.sessions(participant_id);
 CREATE INDEX IF NOT EXISTS idx_responses_participant ON public.responses(participant_id);
+
+-- Prompt 6 unique indexes for idempotent response saving without duplicate rows on retry
+CREATE UNIQUE INDEX IF NOT EXISTS idx_responses_target_unique 
+  ON public.responses(participant_id, phase, list_id, item_index) 
+  WHERE item_index >= 0;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_responses_intrusion_unique 
+  ON public.responses(participant_id, phase, list_id, intrusion_seq) 
+  WHERE item_index = -1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_responses_upsert_key 
+  ON public.responses(participant_id, phase, list_id, item_index, intrusion_seq);
+
+-- One attempt per phase: unique index on (participant_id, phase) for sessions
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_participant_phase
+  ON public.sessions(participant_id, phase);
 
 -- 9. Force instant PostgREST schema cache reload so new columns are immediately queryable
 NOTIFY pgrst, 'reload schema';

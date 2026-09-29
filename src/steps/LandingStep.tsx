@@ -26,6 +26,22 @@ export const LandingStep: React.FC = () => {
         </p>
       </div>
 
+      <div
+        role="note"
+        style={{
+          backgroundColor: 'var(--color-surface-subtle)',
+          borderLeft: '4px solid var(--color-primary)',
+          padding: 'var(--space-3) var(--space-4)',
+          borderRadius: 'var(--radius-sm)',
+          margin: 'var(--space-4) 0',
+          fontSize: 'var(--font-size-xs)',
+          color: 'var(--color-text-muted)',
+          lineHeight: 1.5,
+        }}
+      >
+        <strong>⚠️ Browser Continuity Notice:</strong> This anonymous study stores your session locally in this browser. To return for your 24-hour and 7-day memory tests, please use a standard browser window (not incognito/private mode) and avoid clearing your browser cache/cookies during the study week.
+      </div>
+
       <div className="button-bar">
         <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)' }}>
           Self-directed study • Desktop or laptop recommended

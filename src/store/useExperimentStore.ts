@@ -84,6 +84,7 @@ interface ExperimentState {
   // Session guard & interruption tracking
   sessionInterrupted: boolean;
   studyCompletedAt: string | null;
+  sessionCompletedAt: string | null;
 
   setStep: (step: ExperimentStep) => void;
   nextStep: () => void;
@@ -102,6 +103,7 @@ interface ExperimentState {
   recordDistractorResult: (score: number, total: number, tabHidden: boolean) => void;
   setSessionInterrupted: (val: boolean) => void;
   setStudyCompletedAt: (isoString: string) => void;
+  setSessionCompletedAt: (isoString: string) => void;
   reset: () => void;
 }
 
@@ -136,6 +138,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 
   sessionInterrupted: false,
   studyCompletedAt: null,
+  sessionCompletedAt: null,
 
   setStep: (step: ExperimentStep) => set({ currentStep: step }),
 
@@ -219,6 +222,8 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 
   setStudyCompletedAt: (isoString: string) => set({ studyCompletedAt: isoString }),
 
+  setSessionCompletedAt: (isoString: string) => set({ sessionCompletedAt: isoString }),
+
   reset: () =>
     set({
       currentStep: 'landing',
@@ -245,5 +250,6 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       distractorTotal: 0,
       sessionInterrupted: false,
       studyCompletedAt: null,
+      sessionCompletedAt: null,
     }),
 }));

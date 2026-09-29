@@ -14,6 +14,7 @@ import { SessionDoneStep } from './steps/SessionDoneStep';
 import { Test24hStep } from './steps/Test24hStep';
 import { Test7dStep } from './steps/Test7dStep';
 import { ResultsStep } from './steps/ResultsStep';
+import { ReturnPage } from './pages/ReturnPage';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 const TIMED_STUDY_STEPS: readonly ExperimentStep[] = [
@@ -111,14 +112,16 @@ export const App: React.FC = () => {
     }
   };
 
+  const isReturnRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/return');
+
   return (
     <div className="app-container">
-      <ProgressIndicator />
+      {!isReturnRoute && <ProgressIndicator />}
       {sessionInterrupted && (
         <InterruptionNotice onDismiss={() => setSessionInterrupted(false)} />
       )}
       <main className="main-content">
-        {renderActiveStep()}
+        {isReturnRoute ? <ReturnPage /> : renderActiveStep()}
       </main>
       <footer
         style={{

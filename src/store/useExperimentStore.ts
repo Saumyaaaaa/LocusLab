@@ -1,6 +1,9 @@
 // Zustand state machine managing the sequential experiment progression, participant state, imagery responses, and in-memory recall scores.
 import { create } from 'zustand';
 import { RecallCompletionPayload } from '../components/RecallTest';
+import { PalaceStudyCompletionPayload } from '../components/palace/PalaceScene';
+import { LIST_A, LIST_B } from '../data/lists';
+import { cryptoShuffle } from '../lib/shuffle';
 
 export type ExperimentStep =
   | 'landing'
@@ -52,9 +55,20 @@ interface ExperimentState {
   errorMessage: string | null;
   isSubmitting: boolean;
 
-  // Study and test metrics (stored in Zustand only, per Prompt 3 instructions)
+  // Shuffled word order per participant (prevents locus-word semantic pairing & serial-position confound)
+  shuffledWordsA: string[];
+  shuffledWordsB: string[];
+
+  // Study and test metrics (stored in Zustand only, per Prompt 3/4 instructions)
   tabHiddenByPhase: Record<string, boolean>;
   recallResults: RecallCompletionPayload[];
+
+  // Palace specific metrics
+  palaceMode: 'guided' | 'freewalk' | null;
+  tutorialDurationMs: number | null;
+  palaceVisitsByLocus: Record<number, number>;
+  palaceDwellMsByLocus: Record<number, number>;
+  webglFallbackUsed: boolean;
 
   setStep: (step: ExperimentStep) => void;
   nextStep: () => void;
@@ -66,6 +80,8 @@ interface ExperimentState {
   setIsSubmitting: (val: boolean) => void;
   setPhaseTabHidden: (phase: string, hidden: boolean) => void;
   recordRecallCompletion: (payload: RecallCompletionPayload) => void;
+  initializeWordShuffles: () => void;
+  recordPalaceMetrics: (payload: PalaceStudyCompletionPayload & { tutorialDurationMs: number }) => void;
   reset: () => void;
 }
 
@@ -77,8 +93,18 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   imageryScore: null,
   errorMessage: null,
   isSubmitting: false,
+
+  shuffledWordsA: LIST_A.map((w) => w.word),
+  shuffledWordsB: LIST_B.map((w) => w.word),
+
   tabHiddenByPhase: {},
   recallResults: [],
+
+  palaceMode: null,
+  tutorialDurationMs: null,
+  palaceVisitsByLocus: {},
+  palaceDwellMsByLocus: {},
+  webglFallbackUsed: false,
 
   setStep: (step: ExperimentStep) => set({ currentStep: step }),
 
@@ -122,6 +148,24 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       recallResults: [...state.recallResults, payload],
     })),
 
+  initializeWordShuffles: () => {
+    const shuffledA = cryptoShuffle(LIST_A).map((w) => w.word);
+    const shuffledB = cryptoShuffle(LIST_B).map((w) => w.word);
+    set({
+      shuffledWordsA: shuffledA,
+      shuffledWordsB: shuffledB,
+    });
+  },
+
+  recordPalaceMetrics: (payload) =>
+    set({
+      palaceMode: payload.mode,
+      tutorialDurationMs: payload.tutorialDurationMs,
+      palaceVisitsByLocus: payload.visitsByLocus,
+      palaceDwellMsByLocus: payload.dwellMsByLocus,
+      webglFallbackUsed: payload.webglFallback,
+    }),
+
   reset: () =>
     set({
       currentStep: 'landing',
@@ -131,7 +175,14 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       imageryScore: null,
       errorMessage: null,
       isSubmitting: false,
+      shuffledWordsA: LIST_A.map((w) => w.word),
+      shuffledWordsB: LIST_B.map((w) => w.word),
       tabHiddenByPhase: {},
       recallResults: [],
+      palaceMode: null,
+      tutorialDurationMs: null,
+      palaceVisitsByLocus: {},
+      palaceDwellMsByLocus: {},
+      webglFallbackUsed: false,
     }),
 }));

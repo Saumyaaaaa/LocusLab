@@ -154,3 +154,6 @@ CREATE POLICY "Users can delete own responses"
 CREATE INDEX IF NOT EXISTS idx_participants_code ON public.participants(code);
 CREATE INDEX IF NOT EXISTS idx_sessions_participant ON public.sessions(participant_id);
 CREATE INDEX IF NOT EXISTS idx_responses_participant ON public.responses(participant_id);
+
+-- 9. Force instant PostgREST schema cache reload so new columns are immediately queryable
+NOTIFY pgrst, 'reload schema';

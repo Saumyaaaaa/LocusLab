@@ -1,9 +1,10 @@
-// Zustand state machine managing the sequential experiment progression, participant state, imagery responses, and in-memory recall scores.
+// Zustand state machine managing the sequential experiment progression, counterbalancing, and strict session analytics.
 import { create } from 'zustand';
 import { RecallCompletionPayload } from '../components/RecallTest';
 import { PalaceStudyCompletionPayload } from '../components/palace/PalaceScene';
 import { LIST_A, LIST_B } from '../data/lists';
 import { cryptoShuffle } from '../lib/shuffle';
+import { CounterbalanceAssignment } from '../lib/counterbalancing';
 
 export type ExperimentStep =
   | 'landing'
@@ -55,11 +56,17 @@ interface ExperimentState {
   errorMessage: string | null;
   isSubmitting: boolean;
 
-  // Shuffled word order per participant (prevents locus-word semantic pairing & serial-position confound)
+  // Counterbalancing parameters
+  conditionOrder: 'palace_first' | 'flashcard_first';
+  palaceList: 'listA' | 'listB';
+  flashcardList: 'listA' | 'listB';
+  immediateTestOrder: 'A_first' | 'B_first';
+
+  // Per-participant shuffled word order
   shuffledWordsA: string[];
   shuffledWordsB: string[];
 
-  // Study and test metrics (stored in Zustand only, per Prompt 3/4 instructions)
+  // Study and test metrics
   tabHiddenByPhase: Record<string, boolean>;
   recallResults: RecallCompletionPayload[];
 
@@ -70,10 +77,20 @@ interface ExperimentState {
   palaceDwellMsByLocus: Record<number, number>;
   webglFallbackUsed: boolean;
 
+  // Distractor metrics
+  distractorScore: number;
+  distractorTotal: number;
+
+  // Session guard & interruption tracking
+  sessionInterrupted: boolean;
+  studyCompletedAt: string | null;
+
   setStep: (step: ExperimentStep) => void;
   nextStep: () => void;
   prevStep: () => void;
   setParticipant: (id: string, code: string) => void;
+  setCounterbalanceAssignment: (assignment: CounterbalanceAssignment) => void;
+  setShuffledWords: (wordsA: string[], wordsB: string[]) => void;
   setImageryRating: (questionId: number, rating: number) => void;
   setImageryScore: (score: number) => void;
   setErrorMessage: (msg: string | null) => void;
@@ -82,6 +99,9 @@ interface ExperimentState {
   recordRecallCompletion: (payload: RecallCompletionPayload) => void;
   initializeWordShuffles: () => void;
   recordPalaceMetrics: (payload: PalaceStudyCompletionPayload & { tutorialDurationMs: number }) => void;
+  recordDistractorResult: (score: number, total: number, tabHidden: boolean) => void;
+  setSessionInterrupted: (val: boolean) => void;
+  setStudyCompletedAt: (isoString: string) => void;
   reset: () => void;
 }
 
@@ -94,6 +114,11 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   errorMessage: null,
   isSubmitting: false,
 
+  conditionOrder: 'palace_first',
+  palaceList: 'listA',
+  flashcardList: 'listB',
+  immediateTestOrder: 'A_first',
+
   shuffledWordsA: LIST_A.map((w) => w.word),
   shuffledWordsB: LIST_B.map((w) => w.word),
 
@@ -105,6 +130,12 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   palaceVisitsByLocus: {},
   palaceDwellMsByLocus: {},
   webglFallbackUsed: false,
+
+  distractorScore: 0,
+  distractorTotal: 0,
+
+  sessionInterrupted: false,
+  studyCompletedAt: null,
 
   setStep: (step: ExperimentStep) => set({ currentStep: step }),
 
@@ -126,6 +157,17 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 
   setParticipant: (id: string, code: string) =>
     set({ participantId: id, participantCode: code }),
+
+  setCounterbalanceAssignment: (assignment: CounterbalanceAssignment) =>
+    set({
+      conditionOrder: assignment.conditionOrder,
+      palaceList: assignment.palaceList,
+      flashcardList: assignment.flashcardList,
+      immediateTestOrder: assignment.immediateTestOrder,
+    }),
+
+  setShuffledWords: (wordsA: string[], wordsB: string[]) =>
+    set({ shuffledWordsA: wordsA, shuffledWordsB: wordsB }),
 
   setImageryRating: (questionId: number, rating: number) =>
     set((state) => ({
@@ -166,6 +208,17 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       webglFallbackUsed: payload.webglFallback,
     }),
 
+  recordDistractorResult: (score: number, total: number, tabHidden: boolean) =>
+    set((state) => ({
+      distractorScore: score,
+      distractorTotal: total,
+      tabHiddenByPhase: { ...state.tabHiddenByPhase, distractor: tabHidden },
+    })),
+
+  setSessionInterrupted: (val: boolean) => set({ sessionInterrupted: val }),
+
+  setStudyCompletedAt: (isoString: string) => set({ studyCompletedAt: isoString }),
+
   reset: () =>
     set({
       currentStep: 'landing',
@@ -175,6 +228,10 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       imageryScore: null,
       errorMessage: null,
       isSubmitting: false,
+      conditionOrder: 'palace_first',
+      palaceList: 'listA',
+      flashcardList: 'listB',
+      immediateTestOrder: 'A_first',
       shuffledWordsA: LIST_A.map((w) => w.word),
       shuffledWordsB: LIST_B.map((w) => w.word),
       tabHiddenByPhase: {},
@@ -184,5 +241,9 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       palaceVisitsByLocus: {},
       palaceDwellMsByLocus: {},
       webglFallbackUsed: false,
+      distractorScore: 0,
+      distractorTotal: 0,
+      sessionInterrupted: false,
+      studyCompletedAt: null,
     }),
 }));

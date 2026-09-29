@@ -1,11 +1,19 @@
-// Informed consent component managing adult eligibility verification, anonymous sign-in, and participant code generation.
+// Informed consent component managing adult eligibility verification, anonymous sign-in, counterbalancing, and strict session reuse.
 import React, { useState } from 'react';
 import { useExperimentStore } from '../store/useExperimentStore';
-import { supabase, signInAnonymousParticipant, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { generateParticipantCode } from '../lib/codeGenerator';
+import { generateCounterbalanceAssignment } from '../lib/counterbalancing';
 
 export const ConsentStep: React.FC = () => {
-  const { nextStep, prevStep, participantCode, setParticipant } = useExperimentStore();
+  const {
+    nextStep,
+    prevStep,
+    participantCode,
+    setParticipant,
+    setCounterbalanceAssignment,
+    setShuffledWords,
+  } = useExperimentStore();
 
   const [isAdult, setIsAdult] = useState(false);
   const [hasConsented, setHasConsented] = useState(false);
@@ -25,50 +33,93 @@ export const ConsentStep: React.FC = () => {
     try {
       if (!isSupabaseConfigured) {
         throw new Error(
-          'Supabase environment variables are missing. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file and restart Vite.'
+          'Supabase environment variables are missing. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'
         );
       }
 
-      // Step 1: Sign in anonymously (or retrieve active session)
-      const authData = await signInAnonymousParticipant();
-      const userId = authData?.user?.id;
+      // Step 1: Check if an active session already exists in the browser
+      const { data: sessionData } = await supabase.auth.getSession();
+      let currentSession = sessionData?.session;
+      let currentUser = currentSession?.user;
 
-      if (!userId) {
-        throw new Error('Could not establish an anonymous session. Please check your internet connection.');
+      // Check if this existing session already has a participant record in the database
+      if (currentUser?.id) {
+        const { data: existingParticipant } = await supabase
+          .from('participants')
+          .select('id, code, condition_order, palace_list, immediate_test_order, word_order')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+        if (existingParticipant?.code) {
+          // Rule 3: KEEP stored condition_order, palace_list, and word_order. Never re-randomize!
+          setParticipant(currentUser.id, existingParticipant.code);
+          if (existingParticipant.condition_order && existingParticipant.palace_list) {
+            setCounterbalanceAssignment({
+              conditionOrder: existingParticipant.condition_order,
+              palaceList: existingParticipant.palace_list,
+              flashcardList: existingParticipant.palace_list === 'listA' ? 'listB' : 'listA',
+              immediateTestOrder: existingParticipant.immediate_test_order || 'A_first',
+            });
+          }
+          if (existingParticipant.word_order) {
+            setShuffledWords(
+              existingParticipant.word_order.listA || [],
+              existingParticipant.word_order.listB || []
+            );
+          }
+          setCodeGenerated(true);
+          return;
+        }
       }
 
-      // Step 2: Check if this participant already has a record in the database
-      const { data: existingParticipant } = await supabase
-        .from('participants')
-        .select('id, code')
-        .eq('id', userId)
-        .maybeSingle();
+      // Step 2: Establish a new anonymous session if none active
+      if (!currentSession || !currentUser) {
+        const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
 
-      if (existingParticipant?.code) {
-        setParticipant(userId, existingParticipant.code);
-        setCodeGenerated(true);
-        return;
+        if (authError || !authData?.session || !authData?.user) {
+          throw new Error(
+            `Unable to establish an anonymous session: ${authError?.message || 'Authentication session was not returned. Please try again.'}`
+          );
+        }
+
+        currentSession = authData.session;
+        currentUser = authData.user;
       }
 
-      // Step 3: Generate unbiased 8-character code
+      const userId = currentUser.id;
+
+      // Step 3: Counterbalancing and code generation
+      const assignment = generateCounterbalanceAssignment();
       const newCode = generateParticipantCode(8);
 
-      // Step 4: Insert participant row into Supabase
+      // Per-participant word shuffles
+      const { initializeWordShuffles } = useExperimentStore.getState();
+      initializeWordShuffles();
+      const state = useExperimentStore.getState();
+      const wordsA = state.shuffledWordsA;
+      const wordsB = state.shuffledWordsB;
+
+      // Step 4: Strict insertion using data.user.id with strict RLS (id = auth.uid())
       const { error: insertError } = await supabase
         .from('participants')
         .insert({
           id: userId,
           code: newCode,
+          condition_order: assignment.conditionOrder,
+          palace_list: assignment.palaceList,
+          immediate_test_order: assignment.immediateTestOrder,
+          word_order: { listA: wordsA, listB: wordsB },
         });
 
       if (insertError) {
         throw new Error(
-          'Could not save participant record. Please make sure you have run the updated schema.sql in your Supabase SQL Editor.'
+          `Could not record participant in database: ${insertError.message}. Make sure strict schema.sql is executed.`
         );
       }
 
-      // Step 5: Update store and show code on screen
+      // Step 5: Store in local Zustand store and show code on screen
       setParticipant(userId, newCode);
+      setCounterbalanceAssignment(assignment);
       setCodeGenerated(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'An unexpected error occurred during setup.';
@@ -85,7 +136,6 @@ export const ConsentStep: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      // Fallback
       setCopied(true);
     }
   };

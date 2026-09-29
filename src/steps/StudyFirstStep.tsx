@@ -1,38 +1,63 @@
-// Study phase 1 step rendering the flashcard study mode with 6-minute timestamp timer and keyboard navigation.
-import React, { useEffect, useMemo } from 'react';
+// Study phase 1 step dynamically hosting either Flashcards or 3D Palace according to counterbalanced assignment.
+import React, { useMemo } from 'react';
 import { useExperimentStore } from '../store/useExperimentStore';
-import { LIST_A, WordItem } from '../data/lists';
+import { LIST_A, LIST_B, WordItem } from '../data/lists';
 import { FlashcardStudy } from '../components/FlashcardStudy';
+import { PalaceStudyContainer } from '../components/palace/PalaceStudyContainer';
+import { PalaceStudyCompletionPayload } from '../components/palace/PalaceScene';
 
 export const StudyFirstStep: React.FC = () => {
-  const { nextStep, setPhaseTabHidden, shuffledWordsA, initializeWordShuffles } = useExperimentStore();
+  const {
+    nextStep,
+    conditionOrder,
+    palaceList,
+    flashcardList,
+    shuffledWordsA,
+    shuffledWordsB,
+    setPhaseTabHidden,
+    recordPalaceMetrics,
+  } = useExperimentStore();
 
-  useEffect(() => {
-    if (!shuffledWordsA || shuffledWordsA.length === 0) {
-      initializeWordShuffles();
-    }
-  }, [initializeWordShuffles, shuffledWordsA]);
+  const isPalace = conditionOrder === 'palace_first';
+  const assignedListId = isPalace ? palaceList : flashcardList;
+  const wordStrings = assignedListId === 'listA' ? shuffledWordsA : shuffledWordsB;
+  const originalList = assignedListId === 'listA' ? LIST_A : LIST_B;
 
-  // Map shuffled word strings back to WordItem objects
-  const shuffledItems: readonly WordItem[] = useMemo(() => {
-    const wordMap = new Map(LIST_A.map((item) => [item.word, item]));
-    return shuffledWordsA.map((word, idx) => {
-      const original = wordMap.get(word);
-      return original || { id: `a-shuffled-${idx}`, word, letters: word.length, syllables: 1 };
+  const flashcardItems: readonly WordItem[] = useMemo(() => {
+    const map = new Map(originalList.map((item) => [item.word, item]));
+    return wordStrings.map((word, idx) => {
+      const match = map.get(word);
+      return match || { id: `${assignedListId}-${idx}`, word, letters: word.length, syllables: 1 };
     });
-  }, [shuffledWordsA]);
+  }, [originalList, wordStrings, assignedListId]);
 
-  const handleStudyComplete = ({ tabHidden }: { tabHidden: boolean }) => {
+  if (isPalace) {
+    const handlePalaceComplete = (payload: PalaceStudyCompletionPayload & { tutorialDurationMs: number }) => {
+      recordPalaceMetrics(payload);
+      setPhaseTabHidden('studyFirst_palace', payload.tabHidden);
+      nextStep();
+    };
+
+    return (
+      <PalaceStudyContainer
+        assignedWords={wordStrings}
+        durationSeconds={360}
+        onComplete={handlePalaceComplete}
+      />
+    );
+  }
+
+  const handleFlashcardComplete = ({ tabHidden }: { tabHidden: boolean }) => {
     setPhaseTabHidden('studyFirst_flashcards', tabHidden);
     nextStep();
   };
 
   return (
     <FlashcardStudy
-      words={shuffledItems}
+      words={flashcardItems}
       title="Study Phase 1: Flashcards (6 Minutes)"
       durationSeconds={360}
-      onComplete={handleStudyComplete}
+      onComplete={handleFlashcardComplete}
     />
   );
 };

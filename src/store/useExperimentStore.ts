@@ -1,5 +1,6 @@
-// Zustand state machine managing the sequential experiment progression, participant state, and imagery responses.
+// Zustand state machine managing the sequential experiment progression, participant state, imagery responses, and in-memory recall scores.
 import { create } from 'zustand';
+import { RecallCompletionPayload } from '../components/RecallTest';
 
 export type ExperimentStep =
   | 'landing'
@@ -51,6 +52,10 @@ interface ExperimentState {
   errorMessage: string | null;
   isSubmitting: boolean;
 
+  // Study and test metrics (stored in Zustand only, per Prompt 3 instructions)
+  tabHiddenByPhase: Record<string, boolean>;
+  recallResults: RecallCompletionPayload[];
+
   setStep: (step: ExperimentStep) => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -59,6 +64,8 @@ interface ExperimentState {
   setImageryScore: (score: number) => void;
   setErrorMessage: (msg: string | null) => void;
   setIsSubmitting: (val: boolean) => void;
+  setPhaseTabHidden: (phase: string, hidden: boolean) => void;
+  recordRecallCompletion: (payload: RecallCompletionPayload) => void;
   reset: () => void;
 }
 
@@ -70,6 +77,8 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   imageryScore: null,
   errorMessage: null,
   isSubmitting: false,
+  tabHiddenByPhase: {},
+  recallResults: [],
 
   setStep: (step: ExperimentStep) => set({ currentStep: step }),
 
@@ -103,6 +112,16 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 
   setIsSubmitting: (val: boolean) => set({ isSubmitting: val }),
 
+  setPhaseTabHidden: (phase: string, hidden: boolean) =>
+    set((state) => ({
+      tabHiddenByPhase: { ...state.tabHiddenByPhase, [phase]: hidden },
+    })),
+
+  recordRecallCompletion: (payload: RecallCompletionPayload) =>
+    set((state) => ({
+      recallResults: [...state.recallResults, payload],
+    })),
+
   reset: () =>
     set({
       currentStep: 'landing',
@@ -112,5 +131,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       imageryScore: null,
       errorMessage: null,
       isSubmitting: false,
+      tabHiddenByPhase: {},
+      recallResults: [],
     }),
 }));

@@ -1,28 +1,47 @@
-// Immediate recall view placeholder for testing free recall of both word lists with 1-character typo tolerance.
-import React from 'react';
+// Immediate recall step administering free recall tests sequentially for both word lists with silent score recording.
+import React, { useState } from 'react';
 import { useExperimentStore } from '../store/useExperimentStore';
+import { LIST_A, LIST_B } from '../data/lists';
+import { RecallTest, RecallCompletionPayload } from '../components/RecallTest';
 
 export const ImmediateTestStep: React.FC = () => {
-  const { nextStep, prevStep } = useExperimentStore();
+  const { nextStep, recordRecallCompletion, setPhaseTabHidden } = useExperimentStore();
+  const [currentTestList, setCurrentTestList] = useState<'A' | 'B'>('A');
+
+  const handleTestComplete = (payload: RecallCompletionPayload) => {
+    recordRecallCompletion(payload);
+    setPhaseTabHidden(`immediateTest_${payload.listId}`, payload.tabHidden);
+
+    if (currentTestList === 'A') {
+      // Advance to List B recall
+      setCurrentTestList('B');
+    } else {
+      // Both recall tests complete, advance to sessionDone
+      nextStep();
+    }
+  };
+
+  if (currentTestList === 'A') {
+    return (
+      <RecallTest
+        listId="listA"
+        phase="immediateTest"
+        targetWords={LIST_A}
+        title="Immediate Recall Test (List A - 3 Minutes)"
+        durationSeconds={180}
+        onComplete={handleTestComplete}
+      />
+    );
+  }
 
   return (
-    <div className="card">
-      <span className="badge">Phase 6: Immediate Free Recall</span>
-      <h2 className="title-lg" style={{ marginTop: 'var(--space-3)' }}>Immediate Recall Test</h2>
-      <p className="lead-text">
-        Free recall test for List A and List B in randomized order (3 minutes per list).
-      </p>
-      <div className="description-box">
-        <p>Interactive chip-input recall engine with Levenshtein typo tolerance will be wired in Prompt 3.</p>
-      </div>
-      <div className="button-bar">
-        <button type="button" className="btn btn-secondary" onClick={prevStep}>
-          &larr; Back
-        </button>
-        <button type="button" className="btn btn-primary" onClick={nextStep}>
-          Next: Session 1 Complete &rarr;
-        </button>
-      </div>
-    </div>
+    <RecallTest
+      listId="listB"
+      phase="immediateTest"
+      targetWords={LIST_B}
+      title="Immediate Recall Test (List B - 3 Minutes)"
+      durationSeconds={180}
+      onComplete={handleTestComplete}
+    />
   );
 };

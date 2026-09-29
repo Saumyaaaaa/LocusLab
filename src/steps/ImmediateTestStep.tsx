@@ -73,23 +73,30 @@ export const ImmediateTestStep: React.FC = () => {
       if (participantId && isSupabaseConfigured) {
         // Trigger public.set_session_completed_at() sets authoritative server now()
         const devInfo = detectDeviceInfo();
-        await supabase
+        const updatePayload: Record<string, unknown> = {
+          palace_mode: palaceMode || 'guided',
+          tutorial_ms: tutorialDurationMs || 0,
+          webgl_fallback: webglFallbackUsed,
+          palace_asset_fallback: palaceAssetFallbackUsed,
+          viewport_w: devInfo.viewport_w,
+          viewport_h: devInfo.viewport_h,
+          device_class: devInfo.device_class,
+          input_type: devInfo.input_type,
+          flashcard_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_flashcards'] || tabHiddenByPhase['studySecond_flashcards']),
+          palace_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_palace'] || tabHiddenByPhase['studySecond_palace']),
+          study_completed_at: nowIso,
+          session_completed_at: nowIso,
+        };
+
+        const { error: updateError } = await supabase
           .from('participants')
-          .update({
-            palace_mode: palaceMode || 'guided',
-            tutorial_ms: tutorialDurationMs || 0,
-            webgl_fallback: webglFallbackUsed,
-            palace_asset_fallback: palaceAssetFallbackUsed,
-            viewport_w: devInfo.viewport_w,
-            viewport_h: devInfo.viewport_h,
-            device_class: devInfo.device_class,
-            input_type: devInfo.input_type,
-            flashcard_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_flashcards'] || tabHiddenByPhase['studySecond_flashcards']),
-            palace_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_palace'] || tabHiddenByPhase['studySecond_palace']),
-            study_completed_at: nowIso,
-            session_completed_at: nowIso,
-          })
+          .update(updatePayload)
           .eq('id', participantId);
+
+        if (updateError && (updateError.message.includes('column') || updateError.message.includes('schema cache'))) {
+          const { viewport_w: _vw, viewport_h: _vh, device_class: _dc, input_type: _it, palace_asset_fallback: _paf, ...baseUpdate } = updatePayload;
+          await supabase.from('participants').update(baseUpdate).eq('id', participantId);
+        }
 
         // Record immediateTest completion in sessions table with lists_completed = 2
         await supabase

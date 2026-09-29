@@ -106,21 +106,31 @@ export const ConsentStep: React.FC = () => {
 
       // Step 4: Strict insertion using data.user.id with strict RLS (id = auth.uid())
       const devInfo = detectDeviceInfo();
-      const { error: insertError } = await supabase
+      const insertPayload: Record<string, unknown> = {
+        id: userId,
+        code: newCode,
+        condition_order: assignment.conditionOrder,
+        palace_list: assignment.palaceList,
+        immediate_test_order: assignment.immediateTestOrder,
+        word_order: { listA: wordsA, listB: wordsB },
+        cohort: import.meta.env.VITE_COHORT || 'main',
+        viewport_w: devInfo.viewport_w,
+        viewport_h: devInfo.viewport_h,
+        device_class: devInfo.device_class,
+        input_type: devInfo.input_type,
+      };
+
+      let { error: insertError } = await supabase
         .from('participants')
-        .insert({
-          id: userId,
-          code: newCode,
-          condition_order: assignment.conditionOrder,
-          palace_list: assignment.palaceList,
-          immediate_test_order: assignment.immediateTestOrder,
-          word_order: { listA: wordsA, listB: wordsB },
-          cohort: import.meta.env.VITE_COHORT || 'main',
-          viewport_w: devInfo.viewport_w,
-          viewport_h: devInfo.viewport_h,
-          device_class: devInfo.device_class,
-          input_type: devInfo.input_type,
-        });
+        .insert(insertPayload);
+
+      // If remote schema cache is missing newly added covariate columns, retry with base payload
+      if (insertError && (insertError.message.includes('column') || insertError.message.includes('schema cache'))) {
+        console.warn('Supabase schema cache missing covariate columns. Executing fallback insert. Run pending schema.sql migrations.');
+        const { viewport_w: _vw, viewport_h: _vh, device_class: _dc, input_type: _it, ...basePayload } = insertPayload;
+        const retryResult = await supabase.from('participants').insert(basePayload);
+        insertError = retryResult.error;
+      }
 
       if (insertError) {
         throw new Error(

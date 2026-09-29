@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useExperimentStore } from '../store/useExperimentStore';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { preloadPalaceModels } from '../components/palace/preloadModels';
 
 interface ImageryQuestion {
   id: number;
@@ -40,6 +41,9 @@ const SCALE_DESCRIPTIONS: Record<number, string> = {
 };
 
 export const ImageryStep: React.FC = () => {
+  React.useEffect(() => {
+    preloadPalaceModels();
+  }, []);
   const {
     nextStep,
     prevStep,

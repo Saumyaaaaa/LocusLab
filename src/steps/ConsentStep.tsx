@@ -4,8 +4,12 @@ import { useExperimentStore } from '../store/useExperimentStore';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { generateParticipantCode } from '../lib/codeGenerator';
 import { generateCounterbalanceAssignment } from '../lib/counterbalancing';
+import { preloadPalaceModels } from '../components/palace/preloadModels';
 
 export const ConsentStep: React.FC = () => {
+  React.useEffect(() => {
+    preloadPalaceModels();
+  }, []);
   const {
     nextStep,
     prevStep,

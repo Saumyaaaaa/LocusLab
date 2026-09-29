@@ -76,6 +76,7 @@ interface ExperimentState {
   palaceVisitsByLocus: Record<number, number>;
   palaceDwellMsByLocus: Record<number, number>;
   webglFallbackUsed: boolean;
+  palaceAssetFallbackUsed: boolean;
 
   // Distractor metrics
   distractorScore: number;
@@ -132,6 +133,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   palaceVisitsByLocus: {},
   palaceDwellMsByLocus: {},
   webglFallbackUsed: false,
+  palaceAssetFallbackUsed: false,
 
   distractorScore: 0,
   distractorTotal: 0,
@@ -209,6 +211,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       palaceVisitsByLocus: payload.visitsByLocus,
       palaceDwellMsByLocus: payload.dwellMsByLocus,
       webglFallbackUsed: payload.webglFallback,
+      palaceAssetFallbackUsed: Boolean(payload.palaceAssetFallback),
     }),
 
   recordDistractorResult: (score: number, total: number, tabHidden: boolean) =>
@@ -246,6 +249,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       palaceVisitsByLocus: {},
       palaceDwellMsByLocus: {},
       webglFallbackUsed: false,
+      palaceAssetFallbackUsed: false,
       distractorScore: 0,
       distractorTotal: 0,
       sessionInterrupted: false,

@@ -18,6 +18,7 @@ export const ImmediateTestStep: React.FC = () => {
     tutorialDurationMs,
     webglFallbackUsed,
     tabHiddenByPhase,
+    palaceAssetFallbackUsed,
   } = useExperimentStore();
 
   // Test presentation order determined by cryptographic counterbalancing
@@ -76,6 +77,7 @@ export const ImmediateTestStep: React.FC = () => {
             palace_mode: palaceMode || 'guided',
             tutorial_ms: tutorialDurationMs || 0,
             webgl_fallback: webglFallbackUsed,
+            palace_asset_fallback: palaceAssetFallbackUsed,
             flashcard_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_flashcards'] || tabHiddenByPhase['studySecond_flashcards']),
             palace_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_palace'] || tabHiddenByPhase['studySecond_palace']),
             study_completed_at: nowIso,

@@ -15,6 +15,7 @@ import { Test24hStep } from './steps/Test24hStep';
 import { Test7dStep } from './steps/Test7dStep';
 import { ResultsStep } from './steps/ResultsStep';
 import { ReturnPage } from './pages/ReturnPage';
+import { PalaceTourViewer } from './components/palace/PalaceTourViewer';
 import { DeleteDataModal } from './components/DeleteDataModal';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -114,16 +115,23 @@ export const App: React.FC = () => {
   };
 
   const isReturnRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/return');
+  const isTourRoute = typeof window !== 'undefined' && window.location.search.includes('tour=');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
 
   return (
     <div className="app-container">
-      {!isReturnRoute && <ProgressIndicator />}
-      {sessionInterrupted && (
+      {!isReturnRoute && !isTourRoute && <ProgressIndicator />}
+      {sessionInterrupted && !isTourRoute && (
         <InterruptionNotice onDismiss={() => setSessionInterrupted(false)} />
       )}
       <main className="main-content">
-        {isReturnRoute ? <ReturnPage /> : renderActiveStep()}
+        {isReturnRoute ? (
+          <ReturnPage />
+        ) : isTourRoute ? (
+          <PalaceTourViewer />
+        ) : (
+          renderActiveStep()
+        )}
       </main>
       <footer
         style={{

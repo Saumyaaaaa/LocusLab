@@ -31,3 +31,5 @@ dist-ssr
 
 # Temporary / testing
 .deepeval
+asset-staging/
+

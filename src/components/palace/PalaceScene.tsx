@@ -1,7 +1,7 @@
-// Primary 3D memory palace study scene orchestrating R3F Canvas, guided tour, dwell analytics, and accessible fallback.
+// Primary 3D memory palace study scene orchestrating R3F Canvas, guided tour, asset preloader progress, and accessible fallback.
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { PointerLockControls } from '@react-three/drei';
+import { PointerLockControls, useProgress } from '@react-three/drei';
 import { PALACE_LOCI, LocusData } from '../../data/loci';
 import { PalaceHouse } from './PalaceHouse';
 import { GuidedCameraController } from './GuidedCameraController';
@@ -13,6 +13,7 @@ export interface PalaceStudyCompletionPayload {
   mode: 'guided' | 'freewalk';
   tabHidden: boolean;
   webglFallback: boolean;
+  palaceAssetFallback: boolean;
   visitsByLocus: Record<number, number>;
   dwellMsByLocus: Record<number, number>;
   totalVisits: number;
@@ -21,20 +22,28 @@ export interface PalaceStudyCompletionPayload {
 interface PalaceSceneProps {
   assignedWords: readonly string[]; // 20 words assigned to loci 1-20
   durationSeconds?: number; // 360 seconds (6 minutes)
+  initialLocusIdx?: number;
   onComplete: (metadata: PalaceStudyCompletionPayload) => void;
 }
 
 export const PalaceScene: React.FC<PalaceSceneProps> = ({
   assignedWords,
   durationSeconds = 360,
+  initialLocusIdx = 0,
   onComplete,
 }) => {
   const [webglSupported] = useState(() => isWebGLAvailable());
-  const [useTextFallback, setUseTextFallback] = useState(!webglSupported);
-  const [sceneReady, setSceneReady] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [useTextFallback] = useState(!webglSupported);
+  const [firstFrameRendered, setFirstFrameRendered] = useState(false);
+  const [assetFallbackTriggered, setAssetFallbackTriggered] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(initialLocusIdx);
   const [isFreeWalk, setIsFreeWalk] = useState(false);
   const [usedFreeWalk, setUsedFreeWalk] = useState(false);
+
+  // Asset loading progress tracking
+  const { active: loadingActive, progress, loaded, total } = useProgress();
+  const isFullyLoaded = !loadingActive || progress === 100;
+  const isSceneOperational = firstFrameRendered && isFullyLoaded;
 
   // Analytics: dwell times and visit counts
   const visitsByLocusRef = useRef<Record<number, number>>({ 1: 1 });
@@ -49,8 +58,10 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
     const now = Date.now();
     const elapsed = now - lastLocusTimestampRef.current;
 
-    dwellMsByLocusRef.current[prevLocusId] = (dwellMsByLocusRef.current[prevLocusId] || 0) + elapsed;
-    visitsByLocusRef.current[nextLocusId] = (visitsByLocusRef.current[nextLocusId] || 0) + 1;
+    dwellMsByLocusRef.current[prevLocusId] =
+      (dwellMsByLocusRef.current[prevLocusId] || 0) + elapsed;
+    visitsByLocusRef.current[nextLocusId] =
+      (visitsByLocusRef.current[nextLocusId] || 0) + 1;
     lastLocusTimestampRef.current = now;
   }, []);
 
@@ -75,7 +86,6 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
     if (useTextFallback) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Do not intercept if user is in an input or free-walk
       if (isFreeWalk) return;
 
       if (e.key === 'ArrowRight' || e.key === ' ') {
@@ -108,16 +118,17 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
       mode: usedFreeWalk ? 'freewalk' : 'guided',
       tabHidden,
       webglFallback: false,
+      palaceAssetFallback: assetFallbackTriggered,
       visitsByLocus: visitsByLocusRef.current,
       dwellMsByLocus: dwellMsByLocusRef.current,
       totalVisits,
     });
   };
 
-  // 6-Minute Timer: Starts ONLY when the 3D scene renders its first frame
+  // 6-Minute Timer: Starts ONLY when all models have loaded AND the first 3D frame has rendered
   const { formattedTime, tabHidden, remainingSeconds } = useTimestampTimer({
     durationSeconds,
-    isActive: sceneReady || useTextFallback,
+    isActive: isSceneOperational || useTextFallback,
     onExpire: () => handleSessionExpire(tabHidden),
   });
 
@@ -139,6 +150,7 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
             mode: 'guided',
             tabHidden: meta.tabHidden,
             webglFallback: true,
+            palaceAssetFallback: false,
             visitsByLocus: {},
             dwellMsByLocus: {},
             totalVisits: 20,
@@ -183,6 +195,7 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
             onClick={handleToggleFreeWalk}
             style={{ padding: 'var(--space-1) var(--space-3)', fontSize: 'var(--font-size-xs)' }}
             aria-label="Toggle between guided tour and free walk mode"
+            disabled={!isSceneOperational}
           >
             {isFreeWalk ? 'Exit Free-Walk' : 'Free-Walk Mode (WASD)'}
           </button>
@@ -193,8 +206,12 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
               fontSize: 'var(--font-size-base)',
               fontWeight: 700,
               padding: 'var(--space-1) var(--space-3)',
-              backgroundColor: remainingSeconds <= 30 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)',
-              color: remainingSeconds <= 30 ? 'var(--color-danger)' : 'var(--color-primary)',
+              backgroundColor:
+                remainingSeconds <= 30
+                  ? 'var(--color-danger-bg)'
+                  : 'var(--color-primary-light)',
+              color:
+                remainingSeconds <= 30 ? 'var(--color-danger)' : 'var(--color-primary)',
               borderRadius: 'var(--radius-full)',
             }}
             aria-live="polite"
@@ -216,7 +233,8 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
           border: '1px solid var(--color-surface-border)',
         }}
       >
-        {!sceneReady && (
+        {/* Loading Progress Bar Overlay */}
+        {!isSceneOperational && (
           <div
             style={{
               position: 'absolute',
@@ -227,14 +245,63 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
               justifyContent: 'center',
               color: '#ffffff',
               backgroundColor: '#0f172a',
-              zIndex: 10,
+              zIndex: 20,
+              padding: 'var(--space-4)',
             }}
           >
-            <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, marginBottom: 'var(--space-2)' }}>
-              Constructing 3D Memory Palace...
+            <div
+              style={{
+                fontSize: 'var(--font-size-lg)',
+                fontWeight: 700,
+                marginBottom: 'var(--space-2)',
+              }}
+            >
+              Loading 3D Memory Palace...
             </div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: '#94a3b8' }}>
-              Preparing route and loci geometry
+
+            {/* Visual progress bar */}
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '320px',
+                height: '8px',
+                backgroundColor: '#334155',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                margin: 'var(--space-2) 0',
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.max(8, Math.round(progress))}%`,
+                  height: '100%',
+                  backgroundColor: '#6366f1',
+                  transition: 'width 0.2s ease',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                fontSize: 'var(--font-size-sm)',
+                fontWeight: 600,
+                color: '#c7d2fe',
+                marginBottom: 'var(--space-2)',
+              }}
+            >
+              {Math.round(progress)}% {total > 0 ? `(${loaded}/${total} assets)` : ''}
+            </div>
+
+            <div
+              style={{
+                fontSize: 'var(--font-size-xs)',
+                color: '#94a3b8',
+                textAlign: 'center',
+                maxWidth: '380px',
+              }}
+            >
+              ⏱ The 6-minute study timer will begin only after all 3D furniture models have loaded.
             </div>
           </div>
         )}
@@ -245,21 +312,27 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
           camera={{ fov: 65, near: 0.1, far: 50, position: [0, 1.6, -11] }}
           gl={{ antialias: true, powerPreference: 'default' }}
         >
-          {/* Calm ambient and directional lighting */}
-          <ambientLight intensity={1.2} />
-          <directionalLight position={[10, 20, 10]} intensity={1.0} />
+          {/* Subtle depth fog for atmospheric depth without post-processing */}
+          <fog attach="fog" args={['#0f172a', 15, 45]} />
 
-          {/* 3D House Layout & 20 Loci */}
+          {/* Warm hemisphere light: soft sky warmth, neutral ground tint */}
+          <hemisphereLight args={['#fffbeb', '#1e293b', 1.1]} />
+
+          {/* Warm directional light */}
+          <directionalLight position={[12, 18, 10]} intensity={0.85} color="#fef3c7" />
+
+          {/* 3D House Layout & 20 Loci with CC0 Model support */}
           <PalaceHouse
             activeLocusId={currentLocus.id}
             assignedWords={assignedWords}
+            onAssetFallback={() => setAssetFallbackTriggered(true)}
           />
 
           {/* Guided Tour Camera or Optional Free-Walk */}
           {!isFreeWalk ? (
             <GuidedCameraController
               activeLocusId={currentLocus.id}
-              onFirstFrameRendered={() => setSceneReady(true)}
+              onFirstFrameRendered={() => setFirstFrameRendered(true)}
             />
           ) : (
             <PointerLockControls />
@@ -267,98 +340,86 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
         </Canvas>
 
         {/* Floating Active Word HUD Overlay */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 'var(--space-3)',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 'calc(100% - 24px)',
-            maxWidth: '560px',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(8px)',
-            borderRadius: 'var(--radius-md)',
-            padding: 'var(--space-3) var(--space-4)',
-            boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)',
-            textAlign: 'center',
-            border: '1px solid var(--color-surface-border)',
-            zIndex: 5,
-          }}
-        >
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginBottom: '2px' }}>
-            Locus #{currentLocus.id} of 20: <strong>{currentLocus.name}</strong> ({currentLocus.room})
-          </div>
-
+        {isSceneOperational && (
           <div
             style={{
-              fontSize: '2rem',
-              fontWeight: 800,
-              color: 'var(--color-primary)',
-              letterSpacing: '0.05em',
-              margin: '2px 0',
+              position: 'absolute',
+              bottom: 'var(--space-3)',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 'calc(100% - 24px)',
+              maxWidth: '560px',
+              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-3) var(--space-4)',
+              boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)',
+              textAlign: 'center',
+              border: '1px solid var(--color-surface-border)',
+              zIndex: 5,
             }}
           >
-            {currentAssignedWord}
-          </div>
-
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-2)' }}>
-            💡 <em>Imagine this word doing something bizarre or vivid at the {currentLocus.name}.</em>
-          </div>
-
-          {/* Bottom HUD Controls */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-3)' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handlePrevLocus}
-              style={{ padding: 'var(--space-1) var(--space-3)', fontSize: 'var(--font-size-xs)' }}
-              aria-label="Previous locus"
+            <div
+              style={{
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--color-text-muted)',
+                marginBottom: '2px',
+              }}
             >
-              &larr; Prev (Left Arrow)
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleNextLocus}
-              style={{ padding: 'var(--space-1) var(--space-4)', fontSize: 'var(--font-size-xs)' }}
-              aria-label="Next locus"
-            >
-              Next Locus (Space / Tap) &rarr;
-            </button>
-          </div>
-        </div>
-      </div>
+              Locus #{currentLocus.id} of 20: <strong>{currentLocus.name}</strong> ({currentLocus.room})
+            </div>
 
-      {/* Accessibility text fallback toggle */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: 'var(--space-3)',
-          fontSize: 'var(--font-size-xs)',
-          color: 'var(--color-text-muted)',
-          flexWrap: 'wrap',
-          gap: 'var(--space-2)',
-        }}
-      >
-        <span>
-          Tip: You can loop through all 20 loci as many times as you like until the 6-minute timer concludes.
-        </span>
-        <button
-          type="button"
-          onClick={() => setUseTextFallback(true)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--color-accent)',
-            cursor: 'pointer',
-            textDecoration: 'underline',
-            fontSize: 'var(--font-size-xs)',
-          }}
-        >
-          Skip 3D and use text-route mode instead
-        </button>
+            <div
+              style={{
+                fontSize: '2rem',
+                fontWeight: 800,
+                color: 'var(--color-primary)',
+                letterSpacing: '0.05em',
+                margin: '2px 0',
+              }}
+            >
+              {currentAssignedWord}
+            </div>
+
+            <div
+              style={{
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--color-text-muted)',
+                marginBottom: 'var(--space-2)',
+              }}
+            >
+              💡 <em>Imagine this word doing something bizarre or vivid at the {currentLocus.name}.</em>
+            </div>
+
+            {/* Bottom HUD Controls */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-3)' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handlePrevLocus}
+                style={{
+                  padding: 'var(--space-1) var(--space-3)',
+                  fontSize: 'var(--font-size-xs)',
+                }}
+                aria-label="Previous locus"
+              >
+                &larr; Prev (Left Arrow)
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleNextLocus}
+                style={{
+                  padding: 'var(--space-1) var(--space-4)',
+                  fontSize: 'var(--font-size-xs)',
+                }}
+                aria-label="Next locus"
+              >
+                Next Locus (Space / Tap) &rarr;
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

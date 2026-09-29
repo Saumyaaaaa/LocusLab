@@ -5,6 +5,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { generateParticipantCode } from '../lib/codeGenerator';
 import { generateCounterbalanceAssignment } from '../lib/counterbalancing';
 import { preloadPalaceModels } from '../components/palace/preloadModels';
+import { detectDeviceInfo } from '../lib/deviceDetection';
 
 export const ConsentStep: React.FC = () => {
   React.useEffect(() => {
@@ -104,6 +105,7 @@ export const ConsentStep: React.FC = () => {
       const wordsB = state.shuffledWordsB;
 
       // Step 4: Strict insertion using data.user.id with strict RLS (id = auth.uid())
+      const devInfo = detectDeviceInfo();
       const { error: insertError } = await supabase
         .from('participants')
         .insert({
@@ -114,6 +116,10 @@ export const ConsentStep: React.FC = () => {
           immediate_test_order: assignment.immediateTestOrder,
           word_order: { listA: wordsA, listB: wordsB },
           cohort: import.meta.env.VITE_COHORT || 'main',
+          viewport_w: devInfo.viewport_w,
+          viewport_h: devInfo.viewport_h,
+          device_class: devInfo.device_class,
+          input_type: devInfo.input_type,
         });
 
       if (insertError) {

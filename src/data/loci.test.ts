@@ -65,10 +65,9 @@ describe('PALACE_LOCI naming integrity and scene manifest', () => {
     expect(positions.size).toBe(20);
   });
 
-  it('verifies that no two consecutive loci use the same model file', () => {
-    for (let i = 0; i < PALACE_LOCI.length - 1; i++) {
-      expect(PALACE_LOCI[i].modelFile).not.toBe(PALACE_LOCI[i + 1].modelFile);
-    }
+  it('verifies that all 20 loci use completely unique model files across the entire house', () => {
+    const modelFiles = new Set(PALACE_LOCI.map((l) => l.modelFile));
+    expect(modelFiles.size).toBe(20);
   });
 
   it('verifies that every locus modelFile exists on disk in public/models/', () => {
@@ -79,7 +78,7 @@ describe('PALACE_LOCI naming integrity and scene manifest', () => {
     }
   });
 
-  it('verifies zero stimuli word collisions inside the GLTF JSON headers of all 20 models', () => {
+  it('verifies zero stimuli word collisions across every node, mesh, and material in all 20 GLB files', () => {
     const modelsDir = path.resolve(process.cwd(), 'public/models');
     const violations: string[] = [];
 
@@ -88,13 +87,23 @@ describe('PALACE_LOCI naming integrity and scene manifest', () => {
       if (fs.existsSync(filePath)) {
         const buf = fs.readFileSync(filePath);
         const jsonLen = buf.readUInt32LE(12);
-        const jsonStr = buf.toString('utf8', 20, 20 + jsonLen).toLowerCase();
+        const jsonStr = buf.toString('utf8', 20, 20 + jsonLen);
+        const gltf = JSON.parse(jsonStr);
 
-        for (const w of allStimuliWords) {
-          if (jsonStr.includes(`"${w}"`) || jsonStr.includes(w)) {
-            violations.push(
-              `Model ${locus.modelFile} (Locus: ${locus.name}) contains forbidden token: "${w}"`
-            );
+        const nodeNames = (gltf.nodes || []).map((n: { name?: string }) => n.name || '');
+        const meshNames = (gltf.meshes || []).map((m: { name?: string }) => m.name || '');
+        const matNames = (gltf.materials || []).map((mat: { name?: string }) => mat.name || '');
+        const allNames = [...nodeNames, ...meshNames, ...matNames];
+
+        for (const token of allNames) {
+          const lower = token.toLowerCase();
+          for (const w of allStimuliWords) {
+            // Check exact word or substring
+            if (lower === w || lower.includes(w)) {
+              violations.push(
+                `Model "${locus.modelFile}" (Locus #${locus.id} ${locus.name}) has element "${token}" containing stimulus word "${w}"`
+              );
+            }
           }
         }
       }

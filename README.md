@@ -149,6 +149,11 @@ All data tables (`participants`, `sessions`, `responses`) are guarded with stric
 - `study_completed_at` (timestamptz): Timestamp when Session 1 study completed.
 - `session_completed_at` (timestamptz): Authoritative server timestamp when immediate test finished.
 - `withdrew_early` (bool): `true` if participant chose to stop participating early and view results.
+- `palace_asset_fallback` (bool): `true` if any 3D furniture model failed to load and fell back to primitive geometry.
+- `viewport_w` (int): Viewport width in CSS pixels at study onset (non-identifying device covariate).
+- `viewport_h` (int): Viewport height in CSS pixels at study onset (non-identifying device covariate).
+- `device_class` (text): Device form factor (`'phone'`, `'tablet'`, or `'desktop'`) based on CSS dimensions.
+- `input_type` (text): Primary input modality (`'touch'` or `'mouse'`).
 
 ### `sessions` Table
 - `id` (uuid, PK): Session UUID.

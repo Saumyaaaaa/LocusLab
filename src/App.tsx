@@ -15,9 +15,14 @@ import { Test24hStep } from './steps/Test24hStep';
 import { Test7dStep } from './steps/Test7dStep';
 import { ResultsStep } from './steps/ResultsStep';
 import { ReturnPage } from './pages/ReturnPage';
-import { PalaceTourViewer } from './components/palace/PalaceTourViewer';
 import { DeleteDataModal } from './components/DeleteDataModal';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
+
+const LazyTourViewer = import.meta.env.DEV
+  ? React.lazy(() =>
+      import('./components/palace/PalaceTourViewer').then((m) => ({ default: m.PalaceTourViewer }))
+    )
+  : null;
 
 const TIMED_STUDY_STEPS: readonly ExperimentStep[] = [
   'studyFirst',
@@ -115,7 +120,7 @@ export const App: React.FC = () => {
   };
 
   const isReturnRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/return');
-  const isTourRoute = typeof window !== 'undefined' && window.location.search.includes('tour=');
+  const isTourRoute = Boolean(import.meta.env.DEV) && typeof window !== 'undefined' && window.location.search.includes('tour=');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
 
   return (
@@ -127,8 +132,10 @@ export const App: React.FC = () => {
       <main className="main-content">
         {isReturnRoute ? (
           <ReturnPage />
-        ) : isTourRoute ? (
-          <PalaceTourViewer />
+        ) : isTourRoute && LazyTourViewer ? (
+          <React.Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading tour...</div>}>
+            <LazyTourViewer />
+          </React.Suspense>
         ) : (
           renderActiveStep()
         )}

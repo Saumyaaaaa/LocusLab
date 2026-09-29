@@ -1,4 +1,4 @@
-// Primary 3D memory palace study scene orchestrating R3F Canvas, guided tour, asset preloader progress, and accessible fallback.
+// Primary 3D memory palace study scene with full-viewport immersion, dedicated non-overlapping word panel, and responsive camera framing.
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { PointerLockControls, useProgress } from '@react-three/drei';
@@ -8,6 +8,10 @@ import { GuidedCameraController } from './GuidedCameraController';
 import { RouteTextFallback } from './RouteTextFallback';
 import { isWebGLAvailable } from '../../lib/webglCheck';
 import { useTimestampTimer } from '../../hooks/useTimestampTimer';
+import { DeleteDataModal } from '../DeleteDataModal';
+import { detectDeviceInfo } from '../../lib/deviceDetection';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { useExperimentStore } from '../../store/useExperimentStore';
 
 export interface PalaceStudyCompletionPayload {
   mode: 'guided' | 'freewalk';
@@ -23,6 +27,8 @@ interface PalaceSceneProps {
   assignedWords: readonly string[]; // 20 words assigned to loci 1-20
   durationSeconds?: number; // 360 seconds (6 minutes)
   initialLocusIdx?: number;
+  cameraPositionOverride?: [number, number, number];
+  cameraTargetOverride?: [number, number, number];
   onComplete: (metadata: PalaceStudyCompletionPayload) => void;
 }
 
@@ -30,8 +36,11 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   assignedWords,
   durationSeconds = 360,
   initialLocusIdx = 0,
+  cameraPositionOverride,
+  cameraTargetOverride,
   onComplete,
 }) => {
+  const { participantId } = useExperimentStore();
   const [webglSupported] = useState(() => isWebGLAvailable());
   const [useTextFallback] = useState(!webglSupported);
   const [firstFrameRendered, setFirstFrameRendered] = useState(false);
@@ -39,17 +48,66 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   const [activeIdx, setActiveIdx] = useState(initialLocusIdx);
   const [isFreeWalk, setIsFreeWalk] = useState(false);
   const [usedFreeWalk, setUsedFreeWalk] = useState(false);
+  const [recenterTrigger, setRecenterTrigger] = useState(0);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [showExtendedHelp, setShowExtendedHelp] = useState(false);
+
+  // Viewport dimensions for responsive layout
+  const [viewportDims, setViewportDims] = useState(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1280,
+    height: typeof window !== 'undefined' ? window.innerHeight : 800,
+  }));
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportDims({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   // Asset loading progress tracking
   const { active: loadingActive, progress, loaded, total } = useProgress();
   const isFullyLoaded = !loadingActive || progress === 100;
   const isSceneOperational = firstFrameRendered && isFullyLoaded;
 
+  // Record device covariates once operational
+  const covariatesRecordedRef = useRef(false);
+  useEffect(() => {
+    if (isSceneOperational && !covariatesRecordedRef.current) {
+      covariatesRecordedRef.current = true;
+      if (participantId && isSupabaseConfigured) {
+        const info = detectDeviceInfo();
+        supabase
+          .from('participants')
+          .update({
+            viewport_w: info.viewport_w,
+            viewport_h: info.viewport_h,
+            device_class: info.device_class,
+            input_type: info.input_type,
+          })
+          .eq('id', participantId)
+          .then();
+      }
+    }
+  }, [isSceneOperational, participantId]);
+
   // Analytics: dwell times and visit counts
   const visitsByLocusRef = useRef<Record<number, number>>({ 1: 1 });
   const dwellMsByLocusRef = useRef<Record<number, number>>({});
   const lastLocusTimestampRef = useRef<number>(Date.now());
   const completedRef = useRef(false);
+  const lastNavTimeRef = useRef<number>(0);
 
   // Record dwell time for previous locus when transitioning
   const recordDwell = useCallback((prevIndex: number, nextIndex: number) => {
@@ -65,7 +123,12 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
     lastLocusTimestampRef.current = now;
   }, []);
 
+  // Navigation handlers with wrapping (20 -> 1, 1 -> 20) and rapid-tap debounce (150ms)
   const handleNextLocus = useCallback(() => {
+    const now = Date.now();
+    if (now - lastNavTimeRef.current < 150) return; // Prevent double-trigger debounce
+    lastNavTimeRef.current = now;
+
     setActiveIdx((current) => {
       const next = (current + 1) % PALACE_LOCI.length;
       recordDwell(current, next);
@@ -74,6 +137,10 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   }, [recordDwell]);
 
   const handlePrevLocus = useCallback(() => {
+    const now = Date.now();
+    if (now - lastNavTimeRef.current < 150) return;
+    lastNavTimeRef.current = now;
+
     setActiveIdx((current) => {
       const prev = (current - 1 + PALACE_LOCI.length) % PALACE_LOCI.length;
       recordDwell(current, prev);
@@ -81,15 +148,39 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
     });
   }, [recordDwell]);
 
-  // Keyboard navigation shortcuts
+  const handleSelectLocus = useCallback(
+    (targetIdx: number) => {
+      const now = Date.now();
+      if (now - lastNavTimeRef.current < 150) return;
+      lastNavTimeRef.current = now;
+
+      setActiveIdx((current) => {
+        if (targetIdx === current) return current;
+        recordDwell(current, targetIdx);
+        return targetIdx;
+      });
+    },
+    [recordDwell]
+  );
+
+  // Keyboard navigation shortcuts: Space/ArrowRight (Next), ArrowLeft (Prev)
   useEffect(() => {
     if (useTextFallback) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isFreeWalk) return;
+      if (e.repeat) return; // Ignore auto-repeat when holding down key
 
-      if (e.key === 'ArrowRight' || e.key === ' ') {
-        e.preventDefault();
+      // Never intercept when user is focused inside a text input or textarea
+      const target = document.activeElement;
+      const isInput =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.getAttribute('contenteditable') === 'true';
+      if (isInput) return;
+
+      if (e.code === 'Space' || e.key === ' ' || e.key === 'ArrowRight') {
+        e.preventDefault(); // Prevent page scrolling on Space
         handleNextLocus();
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -140,6 +231,10 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
     });
   };
 
+  const handleRecenter = () => {
+    setRecenterTrigger((prev) => prev + 1);
+  };
+
   if (useTextFallback) {
     return (
       <RouteTextFallback
@@ -163,264 +258,494 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   const currentLocus: LocusData = PALACE_LOCI[activeIdx];
   const currentAssignedWord = assignedWords[activeIdx] || '';
 
+  // Determine layout mode based on real viewport
+  const isDesktop = viewportDims.width >= 900 && viewportDims.height >= 500;
+  const isPhoneLandscape = viewportDims.height < 500 && viewportDims.width >= 500;
+  const isMobilePortrait = !isDesktop && !isPhoneLandscape;
+
   return (
     <div
-      className="card"
+      ref={containerRef}
+      className="palace-study-fullscreen"
       role="region"
       aria-label="3D Memory Palace Study Session"
-      style={{ padding: 'var(--space-4)', position: 'relative' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100dvh',
+        zIndex: 50,
+        backgroundColor: '#f8fafc',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        overscrollBehavior: 'none',
+        fontFamily: 'var(--font-family-base)',
+      }}
     >
-      {/* Top Header Bar */}
-      <div
+      {/* 1. SLIM TOP BAR */}
+      <header
         style={{
+          height: '48px',
+          minHeight: '48px',
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 'var(--space-3)',
-          flexWrap: 'wrap',
-          gap: 'var(--space-2)',
+          justifyContent: 'space-between',
+          padding:
+            '0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left))',
+          zIndex: 60,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span className="badge">Memory Palace (6 Minutes)</span>
-          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-            Mode: <strong>{isFreeWalk ? 'Free-Walk' : 'Guided Tour (Standard)'}</strong>
-          </span>
+        {/* Left: Timer + Locus Index */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-family-mono, monospace)',
+              fontSize: '15px',
+              fontWeight: 800,
+              padding: '3px 10px',
+              backgroundColor:
+                remainingSeconds <= 30 ? '#fee2e2' : '#e0e7ff',
+              color: remainingSeconds <= 30 ? '#dc2626' : '#4338ca',
+              borderRadius: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+            aria-live="polite"
+          >
+            <span>⏱</span>
+            <span>{formattedTime}</span>
+          </div>
+
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+            Locus <span style={{ color: '#4f46e5' }}>#{currentLocus.id}</span> of 20
+          </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+        {/* Center: Progress Dots (visible when width >= 680px) */}
+        {viewportDims.width >= 680 && (
+          <nav
+            aria-label="Locus route progress"
+            style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
+          >
+            {PALACE_LOCI.map((loc, idx) => {
+              const isCurrent = idx === activeIdx;
+              const isVisited = visitsByLocusRef.current[loc.id] > 0;
+              return (
+                <button
+                  key={loc.id}
+                  type="button"
+                  onClick={() => handleSelectLocus(idx)}
+                  title={`Jump to Locus #${loc.id}: ${loc.name} (${loc.room})`}
+                  style={{
+                    width: isCurrent ? '18px' : '8px',
+                    height: '8px',
+                    borderRadius: '4px',
+                    backgroundColor: isCurrent
+                      ? '#4f46e5'
+                      : isVisited
+                      ? '#818cf8'
+                      : '#cbd5e1',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                  aria-label={`Locus ${loc.id}: ${loc.name}`}
+                  aria-current={isCurrent ? 'step' : undefined}
+                />
+              );
+            })}
+          </nav>
+        )}
+
+        {/* Right: Controls & Delete Data */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleRecenter}
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              fontWeight: 600,
+              minHeight: '32px',
+            }}
+            title="Reset camera to ideal locus angle"
+            aria-label="Recenter camera on current locus"
+          >
+            🎯 Recenter
+          </button>
+
           <button
             type="button"
             className="btn btn-secondary"
             onClick={handleToggleFreeWalk}
-            style={{ padding: 'var(--space-1) var(--space-3)', fontSize: 'var(--font-size-xs)' }}
-            aria-label="Toggle between guided tour and free walk mode"
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              fontWeight: 600,
+              minHeight: '32px',
+            }}
             disabled={!isSceneOperational}
+            aria-label="Toggle between guided tour and free walk mode"
           >
-            {isFreeWalk ? 'Exit Free-Walk' : 'Free-Walk Mode (WASD)'}
+            {isFreeWalk ? 'Exit Free-Walk' : 'Free-Walk'}
           </button>
 
-          <div
+          <button
+            type="button"
+            onClick={() => setIsDeleteModalOpen(true)}
             style={{
-              fontFamily: 'var(--font-family-mono)',
-              fontSize: 'var(--font-size-base)',
-              fontWeight: 700,
-              padding: 'var(--space-1) var(--space-3)',
-              backgroundColor:
-                remainingSeconds <= 30
-                  ? 'var(--color-danger-bg)'
-                  : 'var(--color-primary-light)',
-              color:
-                remainingSeconds <= 30 ? 'var(--color-danger)' : 'var(--color-primary)',
-              borderRadius: 'var(--radius-full)',
+              background: 'none',
+              border: 'none',
+              color: '#94a3b8',
+              fontSize: '12px',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              padding: '4px 6px',
             }}
-            aria-live="polite"
+            aria-label="Delete my data"
           >
-            ⏱ {formattedTime}
-          </div>
+            Delete Data
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* 3D Canvas Viewport */}
+      {/* 2. MAIN STUDY VIEWPORT (NON-OVERLAPPING 3D SCENE & WORD PANEL) */}
       <div
         style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: isDesktop
+            ? 'row'
+            : isPhoneLandscape
+            ? 'row'
+            : 'column',
           position: 'relative',
-          width: '100%',
-          height: '420px',
-          borderRadius: 'var(--radius-lg)',
           overflow: 'hidden',
-          backgroundColor: '#0f172a',
-          border: '1px solid var(--color-surface-border)',
         }}
       >
-        {/* Loading Progress Bar Overlay */}
-        {!isSceneOperational && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              backgroundColor: '#0f172a',
-              zIndex: 20,
-              padding: 'var(--space-4)',
-            }}
-          >
+        {/* 3D CANVAS CONTAINER */}
+        <div
+          data-testid="palace-canvas-area"
+          style={{
+            flex: isDesktop ? 1 : isPhoneLandscape ? 1 : undefined,
+            width: isDesktop || isPhoneLandscape ? undefined : '100%',
+            height: isMobilePortrait ? '70%' : '100%',
+            position: 'relative',
+            backgroundColor: '#f1f5f9',
+            touchAction: 'none',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Loading Progress Bar Overlay */}
+          {!isSceneOperational && (
             <div
               style={{
-                fontSize: 'var(--font-size-lg)',
-                fontWeight: 700,
-                marginBottom: 'var(--space-2)',
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#1e293b',
+                backgroundColor: '#ffffff',
+                zIndex: 40,
+                padding: '24px',
               }}
             >
-              Loading 3D Memory Palace...
-            </div>
+              <div style={{ fontSize: '18px', fontWeight: 800, marginBottom: '8px' }}>
+                Loading 3D Memory Palace...
+              </div>
 
-            {/* Visual progress bar */}
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '320px',
-                height: '8px',
-                backgroundColor: '#334155',
-                borderRadius: '4px',
-                overflow: 'hidden',
-                margin: 'var(--space-2) 0',
-              }}
-            >
+              {/* Visual progress bar */}
               <div
                 style={{
-                  width: `${Math.max(8, Math.round(progress))}%`,
-                  height: '100%',
-                  backgroundColor: '#6366f1',
-                  transition: 'width 0.2s ease',
+                  width: '100%',
+                  maxWidth: '320px',
+                  height: '8px',
+                  backgroundColor: '#e2e8f0',
                   borderRadius: '4px',
+                  overflow: 'hidden',
+                  margin: '8px 0',
                 }}
-              />
+              >
+                <div
+                  style={{
+                    width: `${Math.max(8, Math.round(progress))}%`,
+                    height: '100%',
+                    backgroundColor: '#4f46e5',
+                    transition: 'width 0.2s ease',
+                    borderRadius: '4px',
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#64748b',
+                  marginBottom: '8px',
+                }}
+              >
+                {Math.round(progress)}% {total > 0 ? `(${loaded}/${total} furniture models)` : ''}
+              </div>
+
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: '#94a3b8',
+                  textAlign: 'center',
+                  maxWidth: '360px',
+                }}
+              >
+                ⏱ The 6-minute study countdown starts once all 3D assets have fully loaded.
+              </div>
             </div>
-
-            <div
-              style={{
-                fontSize: 'var(--font-size-sm)',
-                fontWeight: 600,
-                color: '#c7d2fe',
-                marginBottom: 'var(--space-2)',
-              }}
-            >
-              {Math.round(progress)}% {total > 0 ? `(${loaded}/${total} assets)` : ''}
-            </div>
-
-            <div
-              style={{
-                fontSize: 'var(--font-size-xs)',
-                color: '#94a3b8',
-                textAlign: 'center',
-                maxWidth: '380px',
-              }}
-            >
-              ⏱ The 6-minute study timer will begin only after all 3D furniture models have loaded.
-            </div>
-          </div>
-        )}
-
-        <Canvas
-          dpr={[1, 1.5]}
-          shadows={false}
-          camera={{ fov: 65, near: 0.1, far: 50, position: [0, 1.6, -11] }}
-          gl={{ antialias: true, powerPreference: 'default' }}
-        >
-          {/* Subtle depth fog for atmospheric depth without post-processing */}
-          <fog attach="fog" args={['#0f172a', 15, 45]} />
-
-          {/* Warm hemisphere light: soft sky warmth, neutral ground tint */}
-          <hemisphereLight args={['#fffbeb', '#1e293b', 1.1]} />
-
-          {/* Warm directional light */}
-          <directionalLight position={[12, 18, 10]} intensity={0.85} color="#fef3c7" />
-
-          {/* 3D House Layout & 20 Loci with CC0 Model support */}
-          <PalaceHouse
-            activeLocusId={currentLocus.id}
-            assignedWords={assignedWords}
-            onAssetFallback={() => setAssetFallbackTriggered(true)}
-          />
-
-          {/* Guided Tour Camera or Optional Free-Walk */}
-          {!isFreeWalk ? (
-            <GuidedCameraController
-              activeLocusId={currentLocus.id}
-              onFirstFrameRendered={() => setFirstFrameRendered(true)}
-            />
-          ) : (
-            <PointerLockControls />
           )}
-        </Canvas>
 
-        {/* Floating Active Word HUD Overlay */}
-        {isSceneOperational && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 'var(--space-3)',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: 'calc(100% - 24px)',
-              maxWidth: '560px',
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(8px)',
-              borderRadius: 'var(--radius-md)',
-              padding: 'var(--space-3) var(--space-4)',
-              boxShadow: '0 8px 20px rgba(0, 0, 0, 0.25)',
-              textAlign: 'center',
-              border: '1px solid var(--color-surface-border)',
-              zIndex: 5,
-            }}
+          <Canvas
+            dpr={[1, 1.5]}
+            shadows={false}
+            camera={{ fov: 65, near: 0.1, far: 60, position: [0, 1.6, -11] }}
+            gl={{ antialias: true, powerPreference: 'default' }}
+            style={{ width: '100%', height: '100%' }}
           >
+            {/* Soft, clean, bright daylight atmosphere (no dark navy gloom) */}
+            <color attach="background" args={['#f1f5f9']} />
+            <fog attach="fog" args={['#f1f5f9', 24, 60]} />
+
+            {/* Warm hemisphere ambient light: crisp white sky with soft slate floor bounce */}
+            <hemisphereLight args={['#ffffff', '#94a3b8', 1.25]} />
+
+            {/* Warm sunlight directional light */}
+            <directionalLight position={[12, 18, 10]} intensity={1.1} color="#fffbeb" />
+
+            {/* Subtle cool fill light to illuminate opposite room angles */}
+            <directionalLight position={[-10, 14, -8]} intensity={0.45} color="#e0e7ff" />
+
+            {/* 3D House Layout & 20 Loci with CC0 Model support */}
+            <PalaceHouse
+              activeLocusId={currentLocus.id}
+              assignedWords={assignedWords}
+              onAssetFallback={() => setAssetFallbackTriggered(true)}
+            />
+
+            {/* Guided Tour Camera or Optional Free-Walk */}
+            {!isFreeWalk ? (
+              <GuidedCameraController
+                activeLocusId={currentLocus.id}
+                recenterTrigger={recenterTrigger}
+                cameraPositionOverride={cameraPositionOverride}
+                cameraTargetOverride={cameraTargetOverride}
+                onFirstFrameRendered={() => setFirstFrameRendered(true)}
+              />
+            ) : (
+              <PointerLockControls />
+            )}
+          </Canvas>
+        </div>
+
+        {/* DEDICATED WORD PANEL (NEVER OVERLAPS THE 3D SCENE) */}
+        <aside
+          data-testid="palace-word-panel"
+          role="region"
+          aria-label="Active Locus Word Prompt"
+          style={{
+            width: isDesktop ? '350px' : isPhoneLandscape ? '40%' : '100%',
+            height: isMobilePortrait ? '30%' : '100%',
+            minHeight: isMobilePortrait ? '185px' : undefined,
+            backgroundColor: '#ffffff',
+            borderLeft: isDesktop || isPhoneLandscape ? '1px solid #e2e8f0' : 'none',
+            borderTop: isMobilePortrait ? '1px solid #e2e8f0' : 'none',
+            boxShadow: isMobilePortrait
+              ? '0 -4px 16px rgba(0,0,0,0.06)'
+              : '-4px 0 16px rgba(0,0,0,0.04)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            padding: isPhoneLandscape ? '10px 14px' : '16px 20px',
+            zIndex: 30,
+            overflowY: 'auto',
+          }}
+        >
+          {/* 1. Locus Name + Room Header */}
+          <div style={{ textAlign: 'center' }}>
             <div
               style={{
-                fontSize: 'var(--font-size-xs)',
-                color: 'var(--color-text-muted)',
+                fontSize: '12px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: '#6366f1',
                 marginBottom: '2px',
               }}
             >
-              Locus #{currentLocus.id} of 20: <strong>{currentLocus.name}</strong> ({currentLocus.room})
+              Locus #{currentLocus.id} &bull; {currentLocus.room}
             </div>
 
-            <div
+            <h1
               style={{
-                fontSize: '2rem',
+                fontSize: '16px',
                 fontWeight: 800,
-                color: 'var(--color-primary)',
+                color: '#1e293b',
+                margin: 0,
+              }}
+            >
+              {currentLocus.name}
+            </h1>
+          </div>
+
+          {/* 2. THE WORD: Large, high contrast, clamp-sized, never truncated */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '4px 0',
+            }}
+          >
+            <div
+              data-testid="palace-assigned-word"
+              style={{
+                fontSize: isPhoneLandscape
+                  ? 'clamp(1.8rem, 4.5vw, 2.4rem)'
+                  : 'clamp(2.1rem, 5.5vw, 3.25rem)',
+                fontWeight: 900,
+                color: '#1e1b4b',
                 letterSpacing: '0.05em',
-                margin: '2px 0',
+                lineHeight: 1.1,
+                textAlign: 'center',
+                textTransform: 'uppercase',
+                wordBreak: 'break-word',
               }}
             >
               {currentAssignedWord}
             </div>
+          </div>
 
+          {/* 3. Short Prompt Line & Optional Help Toggle */}
+          <div style={{ textAlign: 'center', margin: '2px 0' }}>
             <div
               style={{
-                fontSize: 'var(--font-size-xs)',
-                color: 'var(--color-text-muted)',
-                marginBottom: 'var(--space-2)',
+                fontSize: '12px',
+                color: '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
               }}
             >
-              💡 <em>Imagine this word doing something bizarre or vivid at the {currentLocus.name}.</em>
+              <span>💡 Picture this word doing something bizarre here.</span>
+              {activeIdx >= 3 && (
+                <button
+                  type="button"
+                  onClick={() => setShowExtendedHelp((prev) => !prev)}
+                  style={{
+                    background: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '50%',
+                    width: '18px',
+                    height: '18px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#475569',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                  }}
+                  title="Toggle mnemonic tips"
+                  aria-label="Toggle mnemonic tips"
+                >
+                  ?
+                </button>
+              )}
             </div>
 
-            {/* Bottom HUD Controls */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-3)' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handlePrevLocus}
+            {/* Extended Help Tip (collapsible after locus 3) */}
+            {(activeIdx < 3 || showExtendedHelp) && (
+              <div
                 style={{
-                  padding: 'var(--space-1) var(--space-3)',
-                  fontSize: 'var(--font-size-xs)',
+                  fontSize: '11px',
+                  color: '#475569',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  marginTop: '6px',
+                  textAlign: 'left',
+                  lineHeight: 1.4,
                 }}
-                aria-label="Previous locus"
               >
-                &larr; Prev (Left Arrow)
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleNextLocus}
-                style={{
-                  padding: 'var(--space-1) var(--space-4)',
-                  fontSize: 'var(--font-size-xs)',
-                }}
-                aria-label="Next locus"
-              >
-                Next Locus (Space / Tap) &rarr;
-              </button>
-            </div>
+                Connect <strong>{currentAssignedWord}</strong> with the <strong>{currentLocus.name}</strong>.
+                Exaggerate size, movement, or absurdity to make it unforgettable.
+              </div>
+            )}
           </div>
-        )}
+
+          {/* 4. Prev / Next Navigation Buttons (min 48px tap targets) */}
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px',
+              marginTop: '4px',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handlePrevLocus}
+              style={{
+                minHeight: '48px',
+                minWidth: '90px',
+                padding: '0 16px',
+                fontSize: '14px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Previous locus"
+            >
+              &larr; Prev
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleNextLocus}
+              style={{
+                flex: 1,
+                minHeight: '48px',
+                padding: '0 18px',
+                fontSize: '14px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Next locus (Space or tap)"
+            >
+              Next Locus (Space) &rarr;
+            </button>
+          </div>
+        </aside>
       </div>
+
+      {/* Delete Data Modal */}
+      <DeleteDataModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 };

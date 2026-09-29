@@ -197,15 +197,15 @@ export const PALACE_LOCI: readonly LocusData[] = [
   },
   {
     id: 15,
-    name: 'Low Bookshelf',
+    name: 'Reading Armchair',
     room: 'Study',
-    position: [-3.0, 0, 7.2],
-    cameraPosition: [-3.0, 1.5, 4.6],
-    color: '#78350f', // Warm timber
+    position: [-3.0, 0, 6.8],
+    cameraPosition: [-3.0, 1.45, 4.4],
+    color: '#1e3a8a', // Dark blue armchair fabric
     shape: 'box',
-    dimensions: [1.6, 0.9, 0.5],
-    modelFile: 'bookcaseOpenLow.glb',
-    rotation: [0, 0, 0],
+    dimensions: [1.1, 0.9, 1.1],
+    modelFile: 'loungeChairRelax.glb',
+    rotation: [0, Math.PI, 0],
   },
 
   // Room 5: Bedroom (16-18)

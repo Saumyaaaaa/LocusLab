@@ -1,6 +1,6 @@
 // Locus 3D model component loading CC0 GLB assets with automatic fallback to code-primitive geometry.
 import React, { Component, ReactNode, Suspense, useMemo, useEffect } from 'react';
-import { useGLTF, Html } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { LocusData } from '../../data/loci';
 
@@ -195,39 +195,6 @@ export const LocusModel: React.FC<LocusModelProps> = ({
         </Suspense>
       </LocusModelErrorBoundary>
 
-      {/* 4. Floating Accessible Number Badge (Active locus only, unobtrusive) */}
-      {isActive && (
-        <Html
-          position={[0, locus.dimensions[1] + 0.45, 0]}
-          center
-          distanceFactor={6.5}
-          style={{ pointerEvents: 'none' }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              userSelect: 'none',
-            }}
-          >
-            <span
-              style={{
-                backgroundColor: 'rgba(30, 27, 75, 0.85)',
-                color: '#ffffff',
-                padding: '2px 8px',
-                borderRadius: '8px',
-                fontSize: '11px',
-                fontWeight: 700,
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
-                border: '1.5px solid #818cf8',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              #{locus.id} {locus.name}
-            </span>
-          </div>
-        </Html>
-      )}
     </group>
   );
 };

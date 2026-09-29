@@ -5,6 +5,7 @@ import { LIST_A, LIST_B } from '../data/lists';
 import { RecallTest, RecallCompletionPayload } from '../components/RecallTest';
 import { formatListRecallRows, saveResponsesWithRetry } from '../lib/responseQueue';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { detectDeviceInfo } from '../lib/deviceDetection';
 
 export const ImmediateTestStep: React.FC = () => {
   const {
@@ -71,6 +72,7 @@ export const ImmediateTestStep: React.FC = () => {
 
       if (participantId && isSupabaseConfigured) {
         // Trigger public.set_session_completed_at() sets authoritative server now()
+        const devInfo = detectDeviceInfo();
         await supabase
           .from('participants')
           .update({
@@ -78,6 +80,10 @@ export const ImmediateTestStep: React.FC = () => {
             tutorial_ms: tutorialDurationMs || 0,
             webgl_fallback: webglFallbackUsed,
             palace_asset_fallback: palaceAssetFallbackUsed,
+            viewport_w: devInfo.viewport_w,
+            viewport_h: devInfo.viewport_h,
+            device_class: devInfo.device_class,
+            input_type: devInfo.input_type,
             flashcard_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_flashcards'] || tabHiddenByPhase['studySecond_flashcards']),
             palace_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_palace'] || tabHiddenByPhase['studySecond_palace']),
             study_completed_at: nowIso,

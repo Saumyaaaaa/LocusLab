@@ -45,6 +45,10 @@ ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS session_completed_at ti
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS cohort text DEFAULT 'main';
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS withdrew_early bool DEFAULT false;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS palace_asset_fallback bool DEFAULT false;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS viewport_w int;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS viewport_h int;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS device_class text;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS input_type text;
 
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS late bool DEFAULT false;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS start_hour int;

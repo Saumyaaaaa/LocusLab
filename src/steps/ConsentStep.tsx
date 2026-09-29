@@ -109,6 +109,7 @@ export const ConsentStep: React.FC = () => {
           palace_list: assignment.palaceList,
           immediate_test_order: assignment.immediateTestOrder,
           word_order: { listA: wordsA, listB: wordsB },
+          cohort: import.meta.env.VITE_COHORT || 'main',
         });
 
       if (insertError) {

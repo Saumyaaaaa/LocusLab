@@ -15,6 +15,7 @@ import { Test24hStep } from './steps/Test24hStep';
 import { Test7dStep } from './steps/Test7dStep';
 import { ResultsStep } from './steps/ResultsStep';
 import { ReturnPage } from './pages/ReturnPage';
+import { DeleteDataModal } from './components/DeleteDataModal';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 const TIMED_STUDY_STEPS: readonly ExperimentStep[] = [
@@ -113,6 +114,7 @@ export const App: React.FC = () => {
   };
 
   const isReturnRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/return');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
 
   return (
     <div className="app-container">
@@ -131,8 +133,34 @@ export const App: React.FC = () => {
           color: 'var(--color-text-light)',
         }}
       >
-        Locus Lab • Self-directed citizen-science project • Adults (18+) only • Anonymous & Free
+        <div>
+          Locus Lab • Self-directed citizen-science project • Adults (18+) only • Anonymous & Free
+        </div>
+        {(currentStep !== 'landing' || Boolean(participantId)) && (
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <button
+              type="button"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--color-text-muted)',
+                fontSize: 'var(--font-size-xs)',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+              onClick={() => setIsDeleteModalOpen(true)}
+              aria-label="Delete all my recorded data"
+            >
+              Delete My Data
+            </button>
+          </div>
+        )}
       </footer>
+
+      <DeleteDataModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 };

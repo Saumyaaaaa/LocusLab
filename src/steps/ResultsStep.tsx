@@ -1,25 +1,29 @@
-// Results view placeholder rendering the SVG bar chart comparison and privacy data deletion controls.
+// Experiment results step rendering the accessible SVG grouped bar chart and privacy tools.
 import React from 'react';
 import { useExperimentStore } from '../store/useExperimentStore';
+import { ResultsView } from '../components/ResultsView';
 
 export const ResultsStep: React.FC = () => {
-  const { reset } = useExperimentStore();
+  const { participantId, reset } = useExperimentStore();
 
-  return (
-    <div className="card">
-      <span className="badge">Your Experiment Results</span>
-      <h2 className="title-lg" style={{ marginTop: 'var(--space-3)' }}>Palace vs. Flashcards Comparison</h2>
-      <p className="lead-text">
-        At 24 hours you recalled X of 20 palace words vs Y of 20 flashcard words.
-      </p>
-      <div className="description-box">
-        <p>Interactive SVG chart, non-diagnostic imagery comparison, and "Delete all my data" button will be wired in Prompt 7.</p>
+  if (!participantId) {
+    return (
+      <div className="card">
+        <span className="badge">No Active Session</span>
+        <h2 className="title-lg" style={{ marginTop: 'var(--space-3)' }}>
+          Session Not Found
+        </h2>
+        <p className="lead-text">
+          Please complete your memory sessions in this browser to view your results.
+        </p>
+        <div className="button-bar">
+          <button type="button" className="btn btn-primary" onClick={reset}>
+            Begin Study &rarr;
+          </button>
+        </div>
       </div>
-      <div className="button-bar">
-        <button type="button" className="btn btn-secondary" onClick={reset}>
-          &larr; Return to Start
-        </button>
-      </div>
-    </div>
-  );
+    );
+  }
+
+  return <ResultsView participantId={participantId} />;
 };

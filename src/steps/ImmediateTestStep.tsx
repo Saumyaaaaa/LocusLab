@@ -45,6 +45,21 @@ export const ImmediateTestStep: React.FC = () => {
     }
 
     if (currentTestList === firstList) {
+      // Record partial test progress (lists_completed = 1)
+      if (participantId && isSupabaseConfigured) {
+        await supabase
+          .from('sessions')
+          .upsert(
+            {
+              participant_id: participantId,
+              phase: 'immediateTest',
+              start_hour: new Date().getHours(),
+              late: false,
+              lists_completed: 1,
+            },
+            { onConflict: 'participant_id,phase' }
+          );
+      }
       // Advance to second list
       setCurrentTestList(secondList);
     } else {
@@ -54,6 +69,7 @@ export const ImmediateTestStep: React.FC = () => {
       setSessionCompletedAt(nowIso);
 
       if (participantId && isSupabaseConfigured) {
+        // Trigger public.set_session_completed_at() sets authoritative server now()
         await supabase
           .from('participants')
           .update({
@@ -67,17 +83,17 @@ export const ImmediateTestStep: React.FC = () => {
           })
           .eq('id', participantId);
 
-        // Record immediateTest completion in sessions table
+        // Record immediateTest completion in sessions table with lists_completed = 2
         await supabase
           .from('sessions')
           .upsert(
             {
               participant_id: participantId,
               phase: 'immediateTest',
-              started_at: nowIso,
               completed_at: nowIso,
               start_hour: new Date().getHours(),
               late: false,
+              lists_completed: 2,
             },
             { onConflict: 'participant_id,phase' }
           );

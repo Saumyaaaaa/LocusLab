@@ -66,16 +66,19 @@ To verify that participant data is strictly isolated and immune to tampering, pe
 - `palace_tab_hidden` (bool): `true` if browser tab lost visibility during 3D palace study.
 - `session_interrupted` (bool): `true` if user refreshed during a timed study or recall phase.
 - `study_completed_at` (timestamptz): Timestamp when Session 1 study completed.
-- `session_completed_at` (timestamptz): Timestamp when immediate test finished (Session 1 finish).
+- `session_completed_at` (timestamptz): Timestamp when immediate test finished (Session 1 finish, authoritative database timestamp).
+- `cohort` (text): Data collection cohort (`'pilot'` or `'main'`, set from `VITE_COHORT` at creation).
+- `withdrew_early` (bool): `true` if participant elected to conclude participation early and view results.
 
 ### `sessions` Table
 - `id` (uuid, PK): Session UUID.
 - `participant_id` (uuid, FK $\to$ participants.id, Cascade Delete).
 - `phase` (text): Study phase (`'immediateTest'`, `'24h'`, `'7d'`).
-- `started_at` (timestamptz): When session began.
+- `started_at` (timestamptz): When session began (defaults to database `now()`).
 - `completed_at` (timestamptz): When session ended.
 - `late` (bool): `true` if return test was taken in the late window (24h: 48h–72h, 7d: 10d–14d).
 - `start_hour` (int): Local hour of day (0–23) when test started for circadian analysis.
+- `lists_completed` (int): Number of recall lists completed for this phase (`0`, `1`, or `2`). Missing rows for an uncompleted list represent un-administered tests, never assumed zero-recall.
 - `session_interrupted` (bool): `true` if participant refreshed or left mid-test.
 
 ### `responses` Table

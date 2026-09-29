@@ -12,6 +12,8 @@ import {
   WindowEvaluation,
 } from '../lib/timingWindows';
 import { downloadCalendarReminder } from '../lib/calendarReminder';
+import { ResultsView } from '../components/ResultsView';
+import { DeleteDataModal } from '../components/DeleteDataModal';
 
 interface ParticipantRecord {
   id: string;
@@ -21,6 +23,7 @@ interface ParticipantRecord {
   immediate_test_order: 'A_first' | 'B_first';
   session_completed_at: string | null;
   study_completed_at: string | null;
+  withdrew_early?: boolean;
 }
 
 interface SessionRecord {
@@ -56,6 +59,7 @@ export const ReturnPage: React.FC = () => {
 
   // Manual code input fallback if ?code= parameter was missing
   const [manualCode, setManualCode] = useState('');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Dev-only simulated hours state
   const [simulatedHours, setSimulatedHours] = useState<number | null>(() => {
@@ -107,7 +111,7 @@ export const ReturnPage: React.FC = () => {
       // 2. Query participant row strictly matching auth.uid()
       const { data: partData, error: partError } = await supabase
         .from('participants')
-        .select('id, code, condition_order, palace_list, immediate_test_order, session_completed_at, study_completed_at')
+        .select('id, code, condition_order, palace_list, immediate_test_order, session_completed_at, study_completed_at, withdrew_early')
         .eq('id', currentUser.id)
         .maybeSingle();
 
@@ -174,8 +178,14 @@ export const ReturnPage: React.FC = () => {
         return;
       }
 
-      // Case 1: Both 24h and 7d tests are completed
-      if (session7d?.completed_at) {
+      // Case 0: Participant already chose to stop participating early
+      if (participant.withdrew_early) {
+        setViewState('allFinished');
+        return;
+      }
+
+      // Case 1: Both 24h and 7d tests are completed, or 7d window closed
+      if (session7d?.completed_at || eval7d.status === 'closed') {
         setViewState('allFinished');
         return;
       }
@@ -232,6 +242,20 @@ export const ReturnPage: React.FC = () => {
     checkWindowsAndSessions();
   }, [participant, simulatedHours]);
 
+  const handleWithdrawEarly = async () => {
+    if (!participant) return;
+    try {
+      await supabase
+        .from('participants')
+        .update({ withdrew_early: true })
+        .eq('id', participant.id);
+      setParticipant({ ...participant, withdrew_early: true });
+      setViewState('allFinished');
+    } catch {
+      setViewState('allFinished');
+    }
+  };
+
   // Step 3: Start Test Phase (Enforces One Attempt Per Phase)
   const handleStartTest = async () => {
     if (!participant || !activeWindow) return;
@@ -250,15 +274,15 @@ export const ReturnPage: React.FC = () => {
         return;
       }
 
-      // 2. Create the sessions row with started_at, late flag, and local start_hour
+      // 2. Create the sessions row with late flag, start_hour, and lists_completed (started_at defaults to now())
       const startHour = new Date().getHours();
       const { error: insertError } = await supabase.from('sessions').insert({
         participant_id: participant.id,
         phase: activePhase,
-        started_at: new Date().toISOString(),
         late: activeWindow.late,
         start_hour: startHour,
         session_interrupted: false,
+        lists_completed: 0,
       });
 
       if (insertError) {
@@ -296,16 +320,23 @@ export const ReturnPage: React.FC = () => {
     const secondList = firstList === 'A' ? 'B' : 'A';
 
     if (currentTestList === firstList) {
+      // Record partial completion (lists_completed = 1)
+      await supabase
+        .from('sessions')
+        .update({ lists_completed: 1 })
+        .eq('participant_id', participant.id)
+        .eq('phase', activePhase);
+
       // Advance to second list
       setCurrentTestList(secondList);
     } else {
-      // Both lists completed! Complete session row in Supabase
+      // Both lists completed! Complete session row in Supabase with lists_completed = 2
       sessionStorage.removeItem('locus_active_return_test');
       const nowIso = new Date().toISOString();
 
       await supabase
         .from('sessions')
-        .update({ completed_at: nowIso })
+        .update({ completed_at: nowIso, lists_completed: 2 })
         .eq('participant_id', participant.id)
         .eq('phase', activePhase);
 
@@ -712,7 +743,7 @@ export const ReturnPage: React.FC = () => {
 
         {RehearsalReminderBanner}
 
-        <div className="button-bar">
+        <div className="button-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           {participant?.code && (
             <button
               type="button"
@@ -725,42 +756,48 @@ export const ReturnPage: React.FC = () => {
               📅 Download Calendar Reminder (.ics)
             </button>
           )}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleWithdrawEarly}
+            aria-label="Stop participating early and view results now"
+          >
+            Stop participating and see my results &rarr;
+          </button>
           <a href="/" className="btn btn-secondary">
             Return to Home
           </a>
         </div>
 
         {DevSimulationToolbar}
+
+        <div style={{ marginTop: 'var(--space-6)', textAlign: 'center' }}>
+          <button
+            type="button"
+            style={{ background: 'none', border: 'none', color: 'var(--color-danger)', fontSize: 'var(--font-size-xs)', cursor: 'pointer', textDecoration: 'underline' }}
+            onClick={() => setIsDeleteModalOpen(true)}
+          >
+            Delete My Data
+          </button>
+        </div>
+
+        <DeleteDataModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+        />
       </div>
     );
   }
 
-  // VIEW 8: All Tests Completed
-  return (
-    <div className="card" role="region" aria-label="All Sessions Complete">
-      <span className="badge" style={{ backgroundColor: 'var(--color-success)', color: '#fff' }}>
-        Study Complete
-      </span>
-      <h2 className="title-lg" style={{ marginTop: 'var(--space-3)' }}>
-        All Sessions Complete — Thank You!
-      </h2>
-      <p className="lead-text">
-        You have finished all immediate, 24-hour, and 7-day memory tests for Locus Lab. Your participation provides critical citizen-science evidence on the real-world durability of spatial memory versus repetition.
-      </p>
-
-      <div className="description-box" style={{ lineHeight: 1.6, marginTop: 'var(--space-4)' }}>
-        <p>
-          Full comparative results, visualizations, and your anonymized data summary will be presented in Prompt 7.
-        </p>
+  // VIEW 8: Results View (7d test finished, 7d window closed, or participant withdrew early)
+  if (participant) {
+    return (
+      <div>
+        <ResultsView participantId={participant.id} />
+        {DevSimulationToolbar}
       </div>
+    );
+  }
 
-      <div className="button-bar">
-        <a href="/" className="btn btn-secondary">
-          Return to Home
-        </a>
-      </div>
-
-      {DevSimulationToolbar}
-    </div>
-  );
+  return null;
 };

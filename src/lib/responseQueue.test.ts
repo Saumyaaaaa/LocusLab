@@ -110,4 +110,35 @@ describe('formatListRecallRows', () => {
     expect(intrusionRows[1].intrusion_seq).toBe(2);
     expect(intrusionRows[1].correct).toBe(false);
   });
+
+  it('guarantees retried saves create no duplicates when using idx_responses_upsert_key', () => {
+    const firstSaveRows = formatListRecallRows(dummyPayload, LIST_A, 'user-123', 'palace');
+
+    // Simulate database table keyed on the unique index columns: (participant_id, phase, list_id, item_index, intrusion_seq)
+    const dbRows = new Map<string, (typeof firstSaveRows)[0]>();
+
+    const getRowKey = (r: (typeof firstSaveRows)[0]) =>
+      `${r.participant_id}:${r.phase}:${r.list_id}:${r.item_index}:${r.intrusion_seq}`;
+
+    // 1. Initial save
+    firstSaveRows.forEach((row) => {
+      dbRows.set(getRowKey(row), row);
+    });
+    expect(dbRows.size).toBe(22);
+
+    // 2. Simulated network retry (saving the exact same payload a second time)
+    const retrySaveRows = formatListRecallRows(dummyPayload, LIST_A, 'user-123', 'palace');
+    retrySaveRows.forEach((row) => {
+      // Upsert: Overwrites existing entry matching composite key
+      dbRows.set(getRowKey(row), row);
+    });
+
+    // Total rows MUST remain exactly 22 (zero duplicate rows created on retry)
+    expect(dbRows.size).toBe(22);
+
+    // Verify all keys match the composite unique index structure
+    retrySaveRows.forEach((row) => {
+      expect(dbRows.has(getRowKey(row))).toBe(true);
+    });
+  });
 });

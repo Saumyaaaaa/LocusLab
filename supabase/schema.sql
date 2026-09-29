@@ -42,10 +42,14 @@ ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS study_completed_at time
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS session_interrupted bool DEFAULT false;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS immediate_test_order text;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS session_completed_at timestamptz;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS cohort text DEFAULT 'main';
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS withdrew_early bool DEFAULT false;
 
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS late bool DEFAULT false;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS start_hour int;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS session_interrupted bool DEFAULT false;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS lists_completed int DEFAULT 0;
+ALTER TABLE public.sessions ALTER COLUMN started_at SET DEFAULT now();
 
 ALTER TABLE public.responses ADD COLUMN IF NOT EXISTS condition text;
 ALTER TABLE public.responses ADD COLUMN IF NOT EXISTS tab_hidden bool DEFAULT false;
@@ -178,5 +182,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_responses_upsert_key
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_participant_phase
   ON public.sessions(participant_id, phase);
 
--- 9. Force instant PostgREST schema cache reload so new columns are immediately queryable
+-- 9. Server-authoritative session_completed_at trigger
+-- Sets session_completed_at = now() on first update, preserves it permanently against alteration
+CREATE OR REPLACE FUNCTION public.set_session_completed_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.session_completed_at IS NULL AND NEW.session_completed_at IS NOT NULL THEN
+    NEW.session_completed_at := now();
+  ELSIF OLD.session_completed_at IS NOT NULL THEN
+    NEW.session_completed_at := OLD.session_completed_at;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_set_session_completed_at ON public.participants;
+CREATE TRIGGER trigger_set_session_completed_at
+  BEFORE UPDATE ON public.participants
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_session_completed_at();
+
+-- 10. Force instant PostgREST schema cache reload so new columns are immediately queryable
 NOTIFY pgrst, 'reload schema';

@@ -202,5 +202,66 @@ CREATE TRIGGER trigger_set_session_completed_at
   FOR EACH ROW
   EXECUTE FUNCTION public.set_session_completed_at();
 
--- 10. Force instant PostgREST schema cache reload so new columns are immediately queryable
+-- 10. Immutability triggers: prevent participants from modifying assigned experimental conditions
+CREATE OR REPLACE FUNCTION public.check_participants_immutability()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.id <> OLD.id THEN
+    RAISE EXCEPTION 'Cannot modify immutable column id';
+  END IF;
+  IF NEW.code <> OLD.code THEN
+    RAISE EXCEPTION 'Cannot modify immutable column code';
+  END IF;
+  IF NEW.created_at <> OLD.created_at THEN
+    RAISE EXCEPTION 'Cannot modify immutable column created_at';
+  END IF;
+  IF (OLD.condition_order IS NOT NULL AND NEW.condition_order IS DISTINCT FROM OLD.condition_order) THEN
+    RAISE EXCEPTION 'Cannot modify immutable column condition_order';
+  END IF;
+  IF (OLD.palace_list IS NOT NULL AND NEW.palace_list IS DISTINCT FROM OLD.palace_list) THEN
+    RAISE EXCEPTION 'Cannot modify immutable column palace_list';
+  END IF;
+  IF (OLD.immediate_test_order IS NOT NULL AND NEW.immediate_test_order IS DISTINCT FROM OLD.immediate_test_order) THEN
+    RAISE EXCEPTION 'Cannot modify immutable column immediate_test_order';
+  END IF;
+  IF (OLD.word_order IS NOT NULL AND NEW.word_order::text IS DISTINCT FROM OLD.word_order::text) THEN
+    RAISE EXCEPTION 'Cannot modify immutable column word_order';
+  END IF;
+  IF (OLD.cohort IS NOT NULL AND NEW.cohort IS DISTINCT FROM OLD.cohort) THEN
+    RAISE EXCEPTION 'Cannot modify immutable column cohort';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_check_participants_immutability ON public.participants;
+CREATE TRIGGER trigger_check_participants_immutability
+  BEFORE UPDATE ON public.participants
+  FOR EACH ROW
+  EXECUTE FUNCTION public.check_participants_immutability();
+
+-- 11. Immutability triggers: prevent modification of session participant, phase, and started_at
+CREATE OR REPLACE FUNCTION public.check_sessions_immutability()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.participant_id <> OLD.participant_id THEN
+    RAISE EXCEPTION 'Cannot modify immutable column participant_id';
+  END IF;
+  IF NEW.phase <> OLD.phase THEN
+    RAISE EXCEPTION 'Cannot modify immutable column phase';
+  END IF;
+  IF (OLD.started_at IS NOT NULL AND NEW.started_at IS DISTINCT FROM OLD.started_at) THEN
+    RAISE EXCEPTION 'Cannot modify immutable column started_at';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_check_sessions_immutability ON public.sessions;
+CREATE TRIGGER trigger_check_sessions_immutability
+  BEFORE UPDATE ON public.sessions
+  FOR EACH ROW
+  EXECUTE FUNCTION public.check_sessions_immutability();
+
+-- 12. Force instant PostgREST schema cache reload so new columns are immediately queryable
 NOTIFY pgrst, 'reload schema';

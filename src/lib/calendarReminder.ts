@@ -21,6 +21,8 @@ export function downloadCalendarReminder(participantCode: string, completedAtIso
 
   const returnUrl = `${window.location.origin}/return?code=${participantCode}`;
 
+  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+
   const icsContent = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -30,7 +32,7 @@ export function downloadCalendarReminder(participantCode: string, completedAtIso
 
     // --- EVENT 1: 23-HOUR RETURN TEST ---
     'BEGIN:VEVENT',
-    `UID:locuslab-23h-${participantCode}-${baseTime.getTime()}@locuslab.app`,
+    `UID:locuslab-23h-${participantCode}-${baseTime.getTime()}@${host}`,
     `DTSTAMP:${formatIcsDate(new Date())}`,
     `DTSTART:${formatIcsDate(time23hStart)}`,
     `DTEND:${formatIcsDate(time23hEnd)}`,
@@ -47,7 +49,7 @@ export function downloadCalendarReminder(participantCode: string, completedAtIso
 
     // --- EVENT 2: 7-DAY RETURN TEST ---
     'BEGIN:VEVENT',
-    `UID:locuslab-7d-${participantCode}-${baseTime.getTime()}@locuslab.app`,
+    `UID:locuslab-7d-${participantCode}-${baseTime.getTime()}@${host}`,
     `DTSTAMP:${formatIcsDate(new Date())}`,
     `DTSTART:${formatIcsDate(time7dStart)}`,
     `DTEND:${formatIcsDate(time7dEnd)}`,

@@ -144,6 +144,11 @@ export const ArithmeticDistractor: React.FC<ArithmeticDistractorProps> = ({
             onChange={(e) => setUserAnswer(e.target.value)}
             placeholder="Your answer..."
             autoFocus
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            inputMode="numeric"
             style={{
               flex: 1,
               padding: 'var(--space-3)',

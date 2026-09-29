@@ -179,7 +179,9 @@ export const RecallTest: React.FC<RecallTestProps> = ({
           placeholder="Type a remembered word and press Enter..."
           autoComplete="off"
           autoCorrect="off"
+          autoCapitalize="off"
           spellCheck={false}
+          inputMode="text"
           style={{
             flex: 1,
             padding: 'var(--space-3) var(--space-4)',

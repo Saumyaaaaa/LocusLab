@@ -39,7 +39,7 @@ export const LandingStep: React.FC = () => {
           lineHeight: 1.5,
         }}
       >
-        <strong>⚠️ Browser Continuity Notice:</strong> This anonymous study stores your session locally in this browser. To return for your 24-hour and 7-day memory tests, please use a standard browser window (not incognito/private mode) and avoid clearing your browser cache/cookies during the study week.
+        <strong>⚠️ Browser Continuity Notice:</strong> Private/incognito windows and clearing site data will prevent you from returning for later tests. This anonymous study stores your session locally in this browser. Please use a regular browser window to ensure you can complete the 24-hour and 7-day memory tests.
       </div>
 
       <div className="button-bar">

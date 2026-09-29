@@ -137,6 +137,27 @@ export const ReturnPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let metaRobots = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    let created = false;
+    if (!metaRobots) {
+      metaRobots = document.createElement('meta');
+      metaRobots.name = 'robots';
+      document.head.appendChild(metaRobots);
+      created = true;
+    }
+    const prevContent = metaRobots.content;
+    metaRobots.content = 'noindex';
+
+    return () => {
+      if (created && metaRobots) {
+        document.head.removeChild(metaRobots);
+      } else if (metaRobots) {
+        metaRobots.content = prevContent;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     verifyParticipant();
   }, [verifyParticipant]);
 
@@ -501,6 +522,10 @@ export const ReturnPage: React.FC = () => {
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value.toUpperCase())}
               placeholder="e.g. 7K4MN8PX"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               style={{
                 fontFamily: 'var(--font-family-mono)',
                 textTransform: 'uppercase',

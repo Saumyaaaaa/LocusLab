@@ -216,7 +216,7 @@ export const ArithmeticDistractor: React.FC<ArithmeticDistractorProps> = ({
       >
         <div
           style={{
-            fontSize: 'var(--font-size-3xl)',
+            fontSize: 'clamp(1.75rem, 6vw, 2.5rem)',
             fontWeight: 800,
             fontFamily: 'var(--font-family-mono)',
             color: 'var(--color-text)',
@@ -226,7 +226,7 @@ export const ArithmeticDistractor: React.FC<ArithmeticDistractorProps> = ({
           {currentProblem.text} = ?
         </div>
 
-        <form onSubmit={handleSubmit} style={{ maxWidth: '280px', margin: '0 auto' }}>
+        <form onSubmit={handleSubmit} style={{ maxWidth: '300px', margin: '0 auto' }}>
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             <input
               ref={inputRef}
@@ -244,13 +244,14 @@ export const ArithmeticDistractor: React.FC<ArithmeticDistractorProps> = ({
                 fontSize: 'var(--font-size-xl)',
                 fontWeight: 700,
                 fontFamily: 'var(--font-family-mono)',
+                minHeight: '48px',
               }}
             />
             <button
               type="submit"
               className="btn btn-primary"
               aria-label="Submit answer"
-              style={{ minWidth: '80px' }}
+              style={{ minWidth: '80px', minHeight: '48px' }}
             >
               Enter ↵
             </button>

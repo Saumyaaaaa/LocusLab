@@ -99,8 +99,8 @@ export const StudyDurationStep: React.FC = () => {
               style={{
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: 'var(--space-4)',
-                padding: 'var(--space-4) var(--space-5)',
+                gap: 'var(--space-3)',
+                padding: 'var(--space-3) var(--space-4)',
                 borderRadius: 'var(--radius-lg)',
                 border: isSelected
                   ? '2px solid var(--color-primary)'
@@ -110,6 +110,7 @@ export const StudyDurationStep: React.FC = () => {
                   : 'var(--color-surface)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
+                touchAction: 'manipulation',
               }}
             >
               <input
@@ -126,7 +127,7 @@ export const StudyDurationStep: React.FC = () => {
                 }}
               />
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 'var(--font-size-base)', fontWeight: 700, color: 'var(--color-text)' }}>
                     {opt.minutes} Minutes ({opt.label})
                   </span>

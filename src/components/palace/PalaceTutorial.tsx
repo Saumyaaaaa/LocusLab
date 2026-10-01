@@ -94,10 +94,11 @@ export const PalaceTutorial: React.FC<PalaceTutorialProps> = ({
         <div style={{ margin: 'var(--space-3) 0' }}>
           <div
             style={{
-              fontSize: '2.2rem',
+              fontSize: 'clamp(1.75rem, 6vw, 2.5rem)',
               fontWeight: 800,
               color: 'var(--color-accent)',
               letterSpacing: '0.08em',
+              wordBreak: 'break-word',
             }}
           >
             {currentItem.demoWord}

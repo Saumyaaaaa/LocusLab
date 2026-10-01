@@ -244,7 +244,15 @@ export const RecallTest: React.FC<RecallTestProps> = ({
       )}
 
       {/* Word Input Form */}
-      <form onSubmit={handleAddWord} style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+      <form
+        onSubmit={handleAddWord}
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 'var(--space-2)',
+          marginBottom: 'var(--space-2)',
+        }}
+      >
         <input
           ref={inputRef}
           type="text"
@@ -260,11 +268,12 @@ export const RecallTest: React.FC<RecallTestProps> = ({
           autoComplete="off"
           autoCorrect="off"
           spellCheck="false"
+          style={{ flex: '1 1 220px' }}
         />
         <button
           type="submit"
           className="btn btn-primary"
-          style={{ whiteSpace: 'nowrap' }}
+          style={{ whiteSpace: 'nowrap', minHeight: '48px', padding: '0 var(--space-5)' }}
           aria-label="Add word to your recall list"
         >
           Add Word
@@ -335,9 +344,16 @@ export const RecallTest: React.FC<RecallTestProps> = ({
                     border: 'none',
                     color: 'var(--color-text-light)',
                     cursor: 'pointer',
-                    fontSize: '1.1rem',
+                    fontSize: '1.25rem',
                     lineHeight: 1,
-                    padding: '0 2px',
+                    padding: '2px 6px',
+                    minWidth: '24px',
+                    minHeight: '24px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '50%',
+                    touchAction: 'manipulation',
                   }}
                   aria-label={`Remove word ${item.typed}`}
                 >
@@ -350,7 +366,7 @@ export const RecallTest: React.FC<RecallTestProps> = ({
       </div>
 
       {/* Submission Actions */}
-      <div className="button-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+      <div className="button-bar">
         <button
           type="button"
           className="btn btn-secondary"

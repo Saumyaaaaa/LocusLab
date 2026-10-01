@@ -316,6 +316,79 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
               </g>
             </svg>
 
+            {/* Clean, Visible Responsive Score Breakdown for Mobile, Tablet, and Desktop */}
+            <div
+              style={{
+                marginTop: 'var(--space-4)',
+                border: '1px solid var(--color-surface-border)',
+                borderRadius: 'var(--radius-md)',
+                overflow: 'hidden',
+                backgroundColor: 'var(--color-surface)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                  gap: '1px',
+                  backgroundColor: 'var(--color-surface-border)',
+                }}
+              >
+                {scores.map((sc) => (
+                  <div
+                    key={sc.phase}
+                    style={{
+                      padding: 'var(--space-4)',
+                      backgroundColor: 'var(--color-surface)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'var(--space-2)',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 'var(--font-size-base)', color: 'var(--color-primary)' }}>
+                      {sc.label}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: 'var(--space-2) var(--space-3)',
+                        backgroundColor: '#eff6ff',
+                        borderRadius: 'var(--radius-sm)',
+                        borderLeft: '4px solid #2563eb',
+                      }}
+                    >
+                      <span style={{ fontSize: 'var(--font-size-sm)', color: '#1e40af', fontWeight: 600 }}>
+                        🏛️ 3D Palace
+                      </span>
+                      <strong style={{ fontSize: 'var(--font-size-base)', color: '#1e3a8a' }}>
+                        {sc.palaceCorrect} / 20
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: 'var(--space-2) var(--space-3)',
+                        backgroundColor: '#f0fdf4',
+                        borderRadius: 'var(--radius-sm)',
+                        borderLeft: '4px solid #0d9488',
+                      }}
+                    >
+                      <span style={{ fontSize: 'var(--font-size-sm)', color: '#115e59', fontWeight: 600 }}>
+                        📇 Flashcards
+                      </span>
+                      <strong style={{ fontSize: 'var(--font-size-base)', color: '#0f766e' }}>
+                        {sc.flashcardCorrect} / 20
+                      </strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Visually Hidden Data Table for Screen Readers (WCAG AA) */}
             <table
               className="sr-only"

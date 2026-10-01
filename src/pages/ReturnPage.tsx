@@ -524,6 +524,7 @@ export const ReturnPage: React.FC = () => {
               id="manual-code-input"
               type="text"
               maxLength={8}
+              className="input-field"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value.toUpperCase())}
               placeholder="e.g. 7K4MN8PX"
@@ -532,18 +533,17 @@ export const ReturnPage: React.FC = () => {
               autoCapitalize="off"
               spellCheck={false}
               style={{
+                flex: '1 1 180px',
                 fontFamily: 'var(--font-family-mono)',
                 textTransform: 'uppercase',
-                padding: 'var(--space-2) var(--space-3)',
                 letterSpacing: '0.1em',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-surface-border)',
               }}
             />
             <button
               type="button"
               className="btn btn-secondary"
               onClick={() => verifyParticipant(manualCode)}
+              style={{ minHeight: '48px' }}
             >
               Verify Code
             </button>

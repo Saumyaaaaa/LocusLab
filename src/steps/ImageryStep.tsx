@@ -145,7 +145,7 @@ export const ImageryStep: React.FC = () => {
                 style={{
                   border: '1px solid var(--color-surface-border)',
                   borderRadius: 'var(--radius-md)',
-                  padding: 'var(--space-6)',
+                  padding: 'var(--space-4)',
                   backgroundColor: 'var(--color-surface)',
                 }}
               >
@@ -160,16 +160,16 @@ export const ImageryStep: React.FC = () => {
                   Question {idx + 1} of 5
                 </legend>
 
-                <p style={{ marginBottom: 'var(--space-4)', fontWeight: 500 }}>
+                <p style={{ marginBottom: 'var(--space-3)', fontWeight: 500, fontSize: 'var(--font-size-base)' }}>
                   {q.prompt}
                 </p>
 
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                    gap: 'var(--space-3)',
-                    marginTop: 'var(--space-3)',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(95px, 1fr))',
+                    gap: 'var(--space-2)',
+                    marginTop: 'var(--space-2)',
                   }}
                   role="radiogroup"
                   aria-label={`Rating for question ${idx + 1}`}
@@ -183,7 +183,8 @@ export const ImageryStep: React.FC = () => {
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
-                          padding: 'var(--space-3) var(--space-2)',
+                          padding: 'var(--space-3) var(--space-1)',
+                          minHeight: '80px',
                           borderRadius: 'var(--radius-md)',
                           border: isSelected
                             ? '2px solid var(--color-accent)'
@@ -194,6 +195,7 @@ export const ImageryStep: React.FC = () => {
                           cursor: 'pointer',
                           transition: 'all var(--transition-fast)',
                           textAlign: 'center',
+                          touchAction: 'manipulation',
                         }}
                       >
                         <input
@@ -202,21 +204,22 @@ export const ImageryStep: React.FC = () => {
                           value={rating}
                           checked={isSelected}
                           onChange={() => setImageryRating(q.id, rating)}
-                          style={{ marginBottom: 'var(--space-2)' }}
+                          style={{ marginBottom: 'var(--space-1)' }}
                           aria-label={`${rating} - ${SCALE_DESCRIPTIONS[rating]}`}
                         />
-                        <span style={{ fontWeight: 700, fontSize: 'var(--font-size-lg)', color: 'var(--color-primary)' }}>
+                        <span style={{ fontWeight: 700, fontSize: 'var(--font-size-base)', color: 'var(--color-primary)' }}>
                           {rating}
                         </span>
                         <span
                           style={{
-                            fontSize: 'var(--font-size-xs)',
+                            fontSize: '0.7rem',
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--space-1)',
-                            lineHeight: 1.3,
+                            lineHeight: 1.25,
+                            padding: '0 2px',
                           }}
                         >
-                          {rating === 1 ? '1: No image at all' : rating === 5 ? '5: Perfectly clear & vivid' : SCALE_DESCRIPTIONS[rating]}
+                          {rating === 1 ? '1: No image' : rating === 5 ? '5: Perfectly vivid' : SCALE_DESCRIPTIONS[rating]}
                         </span>
                       </label>
                     );

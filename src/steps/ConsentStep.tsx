@@ -193,12 +193,13 @@ export const ConsentStep: React.FC = () => {
           <div
             style={{
               fontFamily: 'var(--font-family-mono)',
-              fontSize: 'var(--font-size-3xl)',
+              fontSize: 'clamp(1.75rem, 6vw, 2.5rem)',
               fontWeight: 800,
-              letterSpacing: '0.15em',
+              letterSpacing: '0.1em',
               color: 'var(--color-primary)',
               userSelect: 'all',
               marginBottom: 'var(--space-4)',
+              wordBreak: 'break-all',
             }}
           >
             {participantCode}

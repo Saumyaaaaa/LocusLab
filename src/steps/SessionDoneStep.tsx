@@ -66,7 +66,7 @@ export const SessionDoneStep: React.FC = () => {
           backgroundColor: 'var(--color-surface-subtle)',
           border: '2px solid var(--color-surface-border)',
           borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-6)',
+          padding: 'var(--space-5) var(--space-4)',
           textAlign: 'center',
           marginBottom: 'var(--space-6)',
         }}
@@ -77,11 +77,12 @@ export const SessionDoneStep: React.FC = () => {
         <div
           style={{
             fontFamily: 'var(--font-family-mono)',
-            fontSize: '2.5rem',
+            fontSize: 'clamp(1.75rem, 6vw, 2.5rem)',
             fontWeight: 800,
             color: 'var(--color-primary)',
-            letterSpacing: '0.15em',
+            letterSpacing: '0.1em',
             marginBottom: 'var(--space-4)',
+            wordBreak: 'break-all',
           }}
         >
           {participantCode || 'N/A'}
@@ -93,6 +94,7 @@ export const SessionDoneStep: React.FC = () => {
             className="btn btn-primary"
             onClick={handleCopyLink}
             aria-label="Copy return link to clipboard"
+            style={{ minHeight: '48px' }}
           >
             {copiedLink ? '✓ Return Link Copied!' : '🔗 Copy Return Link'}
           </button>
@@ -102,6 +104,7 @@ export const SessionDoneStep: React.FC = () => {
             className="btn btn-secondary"
             onClick={handleDownloadCalendar}
             aria-label="Download calendar reminders"
+            style={{ minHeight: '48px' }}
           >
             {downloadedCalendar ? '✓ Calendar File Downloaded (.ics)' : '📅 Download Calendar Reminder (.ics)'}
           </button>

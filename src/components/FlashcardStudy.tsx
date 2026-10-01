@@ -83,7 +83,7 @@ export const FlashcardStudy: React.FC<FlashcardStudyProps> = ({
       {/* Main Flashcard Display */}
       <div
         style={{
-          minHeight: '260px',
+          minHeight: '220px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -91,18 +91,20 @@ export const FlashcardStudy: React.FC<FlashcardStudyProps> = ({
           backgroundColor: 'var(--color-surface-subtle)',
           border: '2px solid var(--color-surface-border)',
           borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-8)',
+          padding: 'var(--space-6) var(--space-4)',
           margin: 'var(--space-4) 0 var(--space-6)',
           boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)',
         }}
       >
         <span
           style={{
-            fontSize: '3rem',
+            fontSize: 'clamp(2.2rem, 8vw, 3.25rem)',
             fontWeight: 800,
             letterSpacing: '0.05em',
             color: 'var(--color-primary)',
             textTransform: 'lowercase',
+            textAlign: 'center',
+            wordBreak: 'break-word',
           }}
           aria-label={`Current word: ${currentWord.word}`}
         >
@@ -114,12 +116,13 @@ export const FlashcardStudy: React.FC<FlashcardStudyProps> = ({
       </div>
 
       {/* Navigation Controls */}
-      <div className="button-bar" style={{ justifyContent: 'center', gap: 'var(--space-4)' }}>
+      <div className="button-bar" style={{ justifyContent: 'center', gap: 'var(--space-3)' }}>
         <button
           type="button"
           className="btn btn-secondary"
           onClick={handlePrev}
           aria-label="Previous flashcard"
+          style={{ minHeight: '48px' }}
         >
           &larr; Previous (Left Arrow)
         </button>
@@ -129,6 +132,7 @@ export const FlashcardStudy: React.FC<FlashcardStudyProps> = ({
           className="btn btn-primary"
           onClick={handleNext}
           aria-label="Next flashcard"
+          style={{ minHeight: '48px' }}
         >
           Next Word (Right Arrow / Space) &rarr;
         </button>

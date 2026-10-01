@@ -57,6 +57,7 @@ ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_correct int 
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_accuracy numeric;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_median_ms int;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_valid bool;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS label_toggled_off bool DEFAULT false;
 
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS late bool DEFAULT false;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS start_hour int;
@@ -204,6 +205,14 @@ CREATE POLICY "Users can read own distractor items"
   FOR SELECT
   TO authenticated
   USING (participant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can update own distractor items" ON public.distractor_items;
+CREATE POLICY "Users can update own distractor items"
+  ON public.distractor_items
+  FOR UPDATE
+  TO authenticated
+  USING (participant_id = auth.uid())
+  WITH CHECK (participant_id = auth.uid());
 
 DROP POLICY IF EXISTS "Users can delete own distractor items" ON public.distractor_items;
 CREATE POLICY "Users can delete own distractor items"

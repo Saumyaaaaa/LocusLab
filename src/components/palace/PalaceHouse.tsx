@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { PALACE_LOCI, LocusData } from '../../data/loci';
 import { LocusModel } from './LocusModel';
+import { ActiveLocusWordLabel } from './ActiveLocusWordLabel';
 import {
   getWoodPlankTexture,
   getTileTexture,
@@ -13,6 +14,7 @@ import {
 interface PalaceHouseProps {
   activeLocusId: number;
   assignedWords: readonly string[];
+  showFloatingWord?: boolean;
   forcePrimitiveFallback?: boolean;
   onAssetFallback?: () => void;
 }
@@ -20,6 +22,7 @@ interface PalaceHouseProps {
 export const PalaceHouse: React.FC<PalaceHouseProps> = ({
   activeLocusId,
   assignedWords,
+  showFloatingWord = true,
   forcePrimitiveFallback = false,
   onAssetFallback,
 }) => {
@@ -256,11 +259,26 @@ export const PalaceHouse: React.FC<PalaceHouseProps> = ({
             locus={locus}
             isActive={isActive}
             assignedWord={assignedWord}
+            showFloatingWord={showFloatingWord}
             forceFallback={forcePrimitiveFallback}
             onFallback={onAssetFallback}
           />
         );
       })}
+
+      {/* ==========================================
+          5. IN-SCENE FLOATING WORD LABEL (Active locus only)
+             Mounted directly at the scene root to operate in true world coordinates,
+             eliminating local group rotation/position offsets from furniture objects.
+          ========================================== */}
+      {showFloatingWord && (() => {
+        const activeLocus = PALACE_LOCI.find((l) => l.id === activeLocusId);
+        const activeIdx = PALACE_LOCI.findIndex((l) => l.id === activeLocusId);
+        const activeAssignedWord = activeIdx >= 0 ? assignedWords[activeIdx] || `word-${activeLocusId}` : '';
+        return activeLocus ? (
+          <ActiveLocusWordLabel locus={activeLocus} assignedWord={activeAssignedWord} />
+        ) : null;
+      })()}
     </group>
   );
 };

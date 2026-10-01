@@ -1,6 +1,5 @@
-// Locus 3D model component loading CC0 GLB assets with automatic fallback to code-primitive geometry.
 import React, { Component, ReactNode, Suspense, useMemo, useEffect } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { LocusData } from '../../data/loci';
 
@@ -145,6 +144,7 @@ interface LocusModelProps {
   locus: LocusData;
   isActive: boolean;
   assignedWord: string;
+  showFloatingWord?: boolean;
   forceFallback?: boolean;
   onFallback?: () => void;
 }
@@ -154,12 +154,14 @@ interface LocusModelProps {
  * 1. Renders grounding blob shadow
  * 2. Attempts to load CC0 .glb model inside ErrorBoundary + Suspense
  * 3. Falls back immediately to clean primitive shape if .glb is absent, fails, or timed out
- * 4. Renders active glowing floor ring and floating HUD badge
+ * 4. Renders active glowing floor ring
+ * 5. Floating in-scene 3D label: full word label ONLY on active locus; small number badge on the other 19
  */
 export const LocusModel: React.FC<LocusModelProps> = ({
   locus,
   isActive,
   assignedWord: _assignedWord,
+  showFloatingWord = true,
   forceFallback = false,
   onFallback,
 }) => {
@@ -232,6 +234,64 @@ export const LocusModel: React.FC<LocusModelProps> = ({
             />
           </Suspense>
         </LocusModelErrorBoundary>
+      )}
+
+      {/* 4. In-Scene Badges:
+          Active Locus: Full word label is rendered at PalaceHouse root when showFloatingWord is true.
+          If showFloatingWord is false, show active number badge.
+          Inactive Loci: show ONLY a small neutral number badge (#n) with ZERO word text.
+      */}
+      {isActive ? (
+        !showFloatingWord && (
+          <Html
+            center
+            occlude={false}
+            position={[0, Math.max(locus.dimensions[1] + 0.35, 1.15), 0]}
+            style={{ pointerEvents: 'none', userSelect: 'none' }}
+          >
+            <div
+              data-testid={`locus-badge-${locus.id}`}
+              style={{
+                backgroundColor: '#4f46e5',
+                color: '#ffffff',
+                padding: '3px 10px',
+                borderRadius: '14px',
+                fontSize: '12px',
+                fontWeight: 800,
+                border: '2px solid #818cf8',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              #{locus.id}
+            </div>
+          </Html>
+        )
+      ) : (
+        <Html
+          center
+          occlude={false}
+          position={[0, Math.max(locus.dimensions[1] + 0.25, 0.75), 0]}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          <div
+            data-testid={`locus-badge-${locus.id}`}
+            style={{
+              backgroundColor: 'rgba(30, 41, 59, 0.85)',
+              color: '#cbd5e1',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '11px',
+              fontWeight: 700,
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            #{locus.id}
+          </div>
+        </Html>
       )}
     </group>
   );

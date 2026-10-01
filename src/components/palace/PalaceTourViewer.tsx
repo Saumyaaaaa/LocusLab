@@ -28,10 +28,13 @@ export const PalaceTourViewer: React.FC = () => {
     }
   }
 
+  const isFreeWalk = params.get('freewalk') === '1' || params.get('mode') === 'freewalk';
+
   return (
     <PalaceScene
       assignedWords={REAL_WORDS}
       initialLocusIdx={initialLocusIdx}
+      initialFreeWalk={isFreeWalk}
       cameraPositionOverride={cameraPositionOverride}
       cameraTargetOverride={cameraTargetOverride}
       durationSeconds={9999}

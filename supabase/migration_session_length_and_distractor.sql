@@ -9,6 +9,7 @@ ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_correct int 
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_accuracy numeric;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_median_ms int;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_valid bool;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS label_toggled_off bool DEFAULT false;
 
 -- 2. Distractor items table (fine-grained arithmetic response logging)
 CREATE TABLE IF NOT EXISTS public.distractor_items (
@@ -28,7 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_distractor_items_participant ON public.distractor
 -- Grants
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.distractor_items TO authenticated;
 
--- 3. Strict Row Level Security (RLS) on distractor_items
+-- 3. Strict Row Level Security (RLS) on distractor_items (TO authenticated)
 ALTER TABLE public.distractor_items ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can insert own distractor items" ON public.distractor_items;
@@ -44,6 +45,14 @@ CREATE POLICY "Users can read own distractor items"
   FOR SELECT
   TO authenticated
   USING (participant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can update own distractor items" ON public.distractor_items;
+CREATE POLICY "Users can update own distractor items"
+  ON public.distractor_items
+  FOR UPDATE
+  TO authenticated
+  USING (participant_id = auth.uid())
+  WITH CHECK (participant_id = auth.uid());
 
 DROP POLICY IF EXISTS "Users can delete own distractor items" ON public.distractor_items;
 CREATE POLICY "Users can delete own distractor items"

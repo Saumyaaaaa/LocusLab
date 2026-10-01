@@ -54,6 +54,7 @@ interface PalaceSceneProps {
   assignedWords: readonly string[]; // 20 words assigned to loci 1-20
   durationSeconds?: number; // 360 seconds (6 minutes)
   initialLocusIdx?: number;
+  initialFreeWalk?: boolean;
   cameraPositionOverride?: [number, number, number];
   cameraTargetOverride?: [number, number, number];
   loadTimeoutMs?: number; // 20-second timeout guard
@@ -64,20 +65,22 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   assignedWords,
   durationSeconds = 360,
   initialLocusIdx = 0,
+  initialFreeWalk = false,
   cameraPositionOverride,
   cameraTargetOverride,
   loadTimeoutMs = 20000,
   onComplete,
 }) => {
-  const { participantId, setPalaceUsedFreewalk } = useExperimentStore();
+  const { participantId, setPalaceUsedFreewalk, setLabelToggledOff } = useExperimentStore();
   const [webglSupported] = useState(() => isWebGLAvailable());
   const [useTextFallback] = useState(!webglSupported);
   const [firstOperationalFrameRendered, setFirstOperationalFrameRendered] = useState(false);
   const [assetFallbackTriggered, setAssetFallbackTriggered] = useState(false);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [activeIdx, setActiveIdx] = useState(initialLocusIdx);
-  const [isFreeWalk, setIsFreeWalk] = useState(false);
-  const [usedFreeWalk, setUsedFreeWalk] = useState(false);
+  const [isFreeWalk, setIsFreeWalk] = useState(initialFreeWalk);
+  const [usedFreeWalk, setUsedFreeWalk] = useState(initialFreeWalk);
+  const [showFloatingWord, setShowFloatingWord] = useState(true);
   const [recenterTrigger, setRecenterTrigger] = useState(0);
   const [takeMeThereTrigger, setTakeMeThereTrigger] = useState(0);
   const moveVectorRef = useRef({ x: 0, z: 0 });
@@ -629,6 +632,7 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
             <PalaceHouse
               activeLocusId={currentLocus.id}
               assignedWords={assignedWords}
+              showFloatingWord={showFloatingWord}
               forcePrimitiveFallback={assetFallbackTriggered || loadTimedOut}
               onAssetFallback={() => setAssetFallbackTriggered(true)}
             />
@@ -796,6 +800,44 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
                 Exaggerate size, movement, or absurdity to make it unforgettable.
               </div>
             )}
+
+            {/* 3D Floating Word Toggle (default ON, logs label_toggled_off) */}
+            <div style={{ marginTop: '6px' }}>
+              <label
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  data-testid="toggle-floating-word"
+                  checked={showFloatingWord}
+                  onChange={(e) => {
+                    const val = e.target.checked;
+                    setShowFloatingWord(val);
+                    if (!val) {
+                      setLabelToggledOff(true);
+                      if (participantId && isSupabaseConfigured) {
+                        supabase
+                          .from('participants')
+                          .update({ label_toggled_off: true })
+                          .eq('id', participantId)
+                          .then(() => {}, () => {});
+                      }
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>Show floating word in 3D</span>
+              </label>
+            </div>
           </div>
 
           {/* 4. Prev / Next Navigation Buttons (min 48px tap targets) */}

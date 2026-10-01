@@ -143,6 +143,7 @@ All data tables (`participants`, `sessions`, `responses`) are guarded with stric
 - `imagery_score` (numeric): Mean vividness rating (1.00 to 5.00) from 5 randomized questions.
 - `palace_mode` (text): Palace mode utilized (`'guided'` | `'freewalk'`).
 - `palace_used_freewalk` (bool): `true` if participant activated free-walk mode at any point during 3D study.
+- `label_toggled_off` (bool): `true` if participant toggled off the in-scene 3D floating word label.
 - `tutorial_ms` (int): Duration spent in pre-study controls tutorial.
 - `tutorial_skipped` (bool): `true` if participant clicked "Skip tutorial" during 3D palace orientation.
 - `distractor_attempted` (int): Total number of arithmetic distractor questions answered.

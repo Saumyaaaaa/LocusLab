@@ -33,6 +33,8 @@ export const RouteTextFallback: React.FC<RouteTextFallbackProps> = ({
     setCurrentIdx((prev) => (prev - 1 + PALACE_LOCI.length) % PALACE_LOCI.length);
   };
 
+  const [showFloatingWord, setShowFloatingWord] = useState(true);
+
   return (
     <div className="card" role="region" aria-label="Accessible Memory Palace Text Route">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
@@ -64,30 +66,89 @@ export const RouteTextFallback: React.FC<RouteTextFallbackProps> = ({
           backgroundColor: 'var(--color-surface-subtle)',
           border: '2px solid var(--color-surface-border)',
           borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-8)',
+          padding: 'var(--space-6)',
           textAlign: 'center',
           marginBottom: 'var(--space-6)',
         }}
       >
-        <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 'var(--space-2)' }}>
+        <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
           📍 Location: {activeLocus.name} ({activeLocus.room})
         </div>
 
-        <div style={{ margin: 'var(--space-6) 0' }}>
-          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Assigned Word
-          </span>
+        {showFloatingWord ? (
           <div
             style={{
-              fontSize: '3rem',
-              fontWeight: 800,
-              color: 'var(--color-primary)',
-              letterSpacing: '0.05em',
-              marginTop: 'var(--space-2)',
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              border: '2px solid #6366f1',
+              borderRadius: '12px',
+              padding: '16px 24px',
+              display: 'inline-block',
+              margin: 'var(--space-4) auto',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
             }}
           >
-            {assignedWord}
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: '#a5b4fc',
+                marginBottom: '4px',
+              }}
+            >
+              #{activeLocus.id} &bull; {activeLocus.name}
+            </div>
+            <div
+              style={{
+                fontSize: 'clamp(1.5rem, 5vw, 3rem)',
+                fontWeight: 900,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                color: '#ffffff',
+                lineHeight: 1.1,
+              }}
+            >
+              {assignedWord}
+            </div>
           </div>
+        ) : (
+          <div
+            style={{
+              backgroundColor: '#4f46e5',
+              color: '#ffffff',
+              padding: '6px 16px',
+              borderRadius: '16px',
+              display: 'inline-block',
+              fontSize: '14px',
+              fontWeight: 800,
+              margin: 'var(--space-4) auto',
+            }}
+          >
+            #{activeLocus.id}
+          </div>
+        )}
+
+        <div style={{ margin: 'var(--space-3) 0' }}>
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              color: '#64748b',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showFloatingWord}
+              onChange={(e) => setShowFloatingWord(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            <span>Show floating word badge</span>
+          </label>
         </div>
 
         <div
@@ -98,6 +159,7 @@ export const RouteTextFallback: React.FC<RouteTextFallbackProps> = ({
             borderRadius: 'var(--radius-md)',
             fontWeight: 500,
             display: 'inline-block',
+            marginTop: 'var(--space-2)',
           }}
         >
           💡 <em>Imagine this word doing something bizarre or vivid at the {activeLocus.name}.</em>

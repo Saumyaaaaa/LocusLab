@@ -95,7 +95,7 @@ def compute_recall_scores(
     potential_cols = [
         "id", "palace_list", "condition_order", "device_class", "cohort",
         "study_seconds", "distractor_valid", "distractor_accuracy",
-        "palace_used_freewalk", "tutorial_skipped"
+        "palace_used_freewalk", "tutorial_skipped", "label_toggled_off"
     ]
     merge_cols = [c for c in potential_cols if c in participants.columns]
 

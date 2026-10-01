@@ -77,6 +77,7 @@ interface ExperimentState {
   studySeconds: number;
   tutorialSkipped: boolean;
   palaceUsedFreewalk: boolean;
+  labelToggledOff: boolean;
 
   // Palace specific metrics
   palaceMode: 'guided' | 'freewalk' | null;
@@ -107,6 +108,7 @@ interface ExperimentState {
   setStudySeconds: (seconds: number) => void;
   setTutorialSkipped: (skipped: boolean) => void;
   setPalaceUsedFreewalk: (used: boolean) => void;
+  setLabelToggledOff: (val: boolean) => void;
   setCounterbalanceAssignment: (assignment: CounterbalanceAssignment) => void;
   setShuffledWords: (wordsA: string[], wordsB: string[]) => void;
   setImageryRating: (questionId: number, rating: number) => void;
@@ -154,6 +156,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   studySeconds: 240,
   tutorialSkipped: false,
   palaceUsedFreewalk: false,
+  labelToggledOff: false,
 
   palaceMode: null,
   tutorialDurationMs: null,
@@ -205,6 +208,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   setTutorialSkipped: (skipped: boolean) => set({ tutorialSkipped: skipped }),
 
   setPalaceUsedFreewalk: (used: boolean) => set({ palaceUsedFreewalk: used }),
+  setLabelToggledOff: (val: boolean) => set({ labelToggledOff: val }),
 
   setCounterbalanceAssignment: (assignment: CounterbalanceAssignment) =>
     set({
@@ -302,6 +306,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       studySeconds: 240,
       tutorialSkipped: false,
       palaceUsedFreewalk: false,
+      labelToggledOff: false,
       palaceMode: null,
       tutorialDurationMs: null,
       palaceVisitsByLocus: {},

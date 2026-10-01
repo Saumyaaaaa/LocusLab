@@ -14,6 +14,7 @@ export const StudyFirstStep: React.FC = () => {
     flashcardList,
     shuffledWordsA,
     shuffledWordsB,
+    studySeconds,
     setPhaseTabHidden,
     recordPalaceMetrics,
   } = useExperimentStore();
@@ -22,6 +23,7 @@ export const StudyFirstStep: React.FC = () => {
   const assignedListId = isPalace ? palaceList : flashcardList;
   const wordStrings = assignedListId === 'listA' ? shuffledWordsA : shuffledWordsB;
   const originalList = assignedListId === 'listA' ? LIST_A : LIST_B;
+  const studyMinutes = Math.round(studySeconds / 60);
 
   const flashcardItems: readonly WordItem[] = useMemo(() => {
     const map = new Map(originalList.map((item) => [item.word, item]));
@@ -41,7 +43,7 @@ export const StudyFirstStep: React.FC = () => {
     return (
       <PalaceStudyContainer
         assignedWords={wordStrings}
-        durationSeconds={360}
+        durationSeconds={studySeconds}
         onComplete={handlePalaceComplete}
       />
     );
@@ -55,8 +57,8 @@ export const StudyFirstStep: React.FC = () => {
   return (
     <FlashcardStudy
       words={flashcardItems}
-      title="Study Phase 1: Flashcards (6 Minutes)"
-      durationSeconds={360}
+      title={`Study Phase 1: Flashcards (${studyMinutes} Minutes)`}
+      durationSeconds={studySeconds}
       onComplete={handleFlashcardComplete}
     />
   );

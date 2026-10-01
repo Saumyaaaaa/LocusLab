@@ -40,6 +40,11 @@ def parse_args():
         action="store_true",
         help="Include sessions where palace_asset_fallback was true (default: exclude per prereg)"
     )
+    parser.add_argument(
+        "--exclude-invalid-distractor",
+        action="store_true",
+        help="Exclude participants whose distractor_valid flag is False"
+    )
     return parser.parse_args()
 
 def load_data(data_dir: str):
@@ -56,13 +61,23 @@ def load_data(data_dir: str):
     responses = pd.read_csv(r_path)
     return participants, sessions, responses
 
-def compute_recall_scores(participants: pd.DataFrame, responses: pd.DataFrame, exclude_fallbacks: bool = True):
+def compute_recall_scores(
+    participants: pd.DataFrame,
+    responses: pd.DataFrame,
+    exclude_fallbacks: bool = True,
+    exclude_invalid_distractor: bool = False
+):
     # Filter out asset fallbacks if specified by preregistration
+    valid_mask = pd.Series(True, index=participants.index)
     if exclude_fallbacks and "palace_asset_fallback" in participants.columns:
-        valid_participants = participants[participants["palace_asset_fallback"] != True]["id"].unique()
-        print(f"[*] Preregistration filter: Retained {len(valid_participants)}/{len(participants)} participants (palace_asset_fallback == False)")
-    else:
-        valid_participants = participants["id"].unique()
+        valid_mask &= (participants["palace_asset_fallback"] != True)
+        print(f"[*] Preregistration filter: Retained {valid_mask.sum()}/{len(participants)} participants (palace_asset_fallback == False)")
+
+    if exclude_invalid_distractor and "distractor_valid" in participants.columns:
+        valid_mask &= (participants["distractor_valid"] == True)
+        print(f"[*] Distractor filter: Retained {valid_mask.sum()}/{len(participants)} participants (distractor_valid == True)")
+
+    valid_participants = participants[valid_mask]["id"].unique()
 
     # Filter responses to valid participants
     df_resp = responses[responses["participant_id"].isin(valid_participants)].copy()
@@ -76,9 +91,16 @@ def compute_recall_scores(participants: pd.DataFrame, responses: pd.DataFrame, e
         .reset_index(name="score")
     )
 
-    # Merge participant condition mappings (palace_list: 'listA' or 'listB')
+    # Columns to merge from participants
+    potential_cols = [
+        "id", "palace_list", "condition_order", "device_class", "cohort",
+        "study_seconds", "distractor_valid", "distractor_accuracy",
+        "palace_used_freewalk", "tutorial_skipped"
+    ]
+    merge_cols = [c for c in potential_cols if c in participants.columns]
+
     df_merged = correct_counts.merge(
-        participants[["id", "palace_list", "condition_order", "device_class", "cohort"]],
+        participants[merge_cols],
         left_on="participant_id",
         right_on="id"
     )
@@ -92,9 +114,10 @@ def compute_recall_scores(participants: pd.DataFrame, responses: pd.DataFrame, e
 
     return df_merged
 
-def run_statistical_tests(scores_df: pd.DataFrame):
+def run_statistical_tests(scores_df: pd.DataFrame, label_prefix: str = ""):
+    header = f"STATISTICAL HYPOTHESIS TESTING RESULTS {label_prefix}".strip()
     print("\n" + "=" * 60)
-    print("           STATISTICAL HYPOTHESIS TESTING RESULTS           ")
+    print(f"           {header}           ")
     print("=" * 60)
 
     phases = ["immediateTest", "test24h", "test7d"]
@@ -131,6 +154,37 @@ def run_statistical_tests(scores_df: pd.DataFrame):
         if p_val < 0.05:
             print(f"    >>> Statistically Significant (p < 0.05)")
 
+def run_subgroup_analyses(scores_df: pd.DataFrame):
+    print("\n" + "=" * 60)
+    print("                 SUBGROUP & COVARIATE ANALYSES                 ")
+    print("=" * 60)
+
+    # 1. Study Duration Covariate
+    if "study_seconds" in scores_df.columns and scores_df["study_seconds"].notna().any():
+        print("\n--- Breakdown by Study Duration (study_seconds) ---")
+        for duration, group in scores_df.groupby("study_seconds"):
+            dur_min = round(duration / 60)
+            print(f"\n[Duration: {dur_min} min ({duration}s)]")
+            for phase in ["immediateTest", "test24h", "test7d"]:
+                sub = group[group["phase"] == phase]
+                piv = sub.pivot_table(index="participant_id", columns="condition", values="score").dropna(subset=["Palace", "Flashcard"])
+                if len(piv) > 0:
+                    diff = piv["Palace"] - piv["Flashcard"]
+                    print(f"  {phase}: N={len(piv)}, Palace={piv['Palace'].mean():.2f}, Flashcard={piv['Flashcard'].mean():.2f}, Diff={diff.mean():+.2f}")
+
+    # 2. Free-Walk vs Guided Mode
+    if "palace_used_freewalk" in scores_df.columns and scores_df["palace_used_freewalk"].notna().any():
+        print("\n--- Breakdown by Palace Navigation Mode (palace_used_freewalk) ---")
+        for freewalk_used, group in scores_df.groupby("palace_used_freewalk"):
+            mode_str = "Used Free-Walk" if freewalk_used else "Guided Only"
+            print(f"\n[{mode_str}]")
+            for phase in ["immediateTest", "test24h"]:
+                sub = group[group["phase"] == phase]
+                piv = sub.pivot_table(index="participant_id", columns="condition", values="score").dropna(subset=["Palace", "Flashcard"])
+                if len(piv) > 0:
+                    diff = piv["Palace"] - piv["Flashcard"]
+                    print(f"  {phase}: N={len(piv)}, Palace={piv['Palace'].mean():.2f}, Flashcard={piv['Flashcard'].mean():.2f}, Diff={diff.mean():+.2f}")
+
 def main():
     args = parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
@@ -146,8 +200,29 @@ def main():
     print(f"Total Sessions:     {len(sessions)}")
     print(f"Total Responses:    {len(responses)}")
 
-    scores = compute_recall_scores(participants, responses, exclude_fallbacks=not args.include_fallbacks)
-    run_statistical_tests(scores)
+    # Primary Analysis
+    scores = compute_recall_scores(
+        participants,
+        responses,
+        exclude_fallbacks=not args.include_fallbacks,
+        exclude_invalid_distractor=args.exclude_invalid_distractor
+    )
+    run_statistical_tests(scores, label_prefix="(PRIMARY)")
+    run_subgroup_analyses(scores)
+
+    # Distractor Quality Sensitivity Analysis (if not already filtered)
+    if not args.exclude_invalid_distractor and "distractor_valid" in participants.columns:
+        invalid_count = (participants["distractor_valid"] == False).sum()
+        if invalid_count > 0:
+            print("\n" + "=" * 60)
+            print(f"[*] SENSITIVITY CHECK: Excluding {invalid_count} participants with distractor_valid == False")
+            sensitivity_scores = compute_recall_scores(
+                participants,
+                responses,
+                exclude_fallbacks=not args.include_fallbacks,
+                exclude_invalid_distractor=True
+            )
+            run_statistical_tests(sensitivity_scores, label_prefix="(SENSITIVITY: VALID DISTRACTOR ONLY)")
 
     # Save aggregated scores
     out_csv = os.path.join(args.out_dir, "participant_condition_scores.csv")

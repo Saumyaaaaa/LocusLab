@@ -10,6 +10,7 @@ export type ExperimentStep =
   | 'landing'
   | 'consent'
   | 'imagery'
+  | 'studyDuration'
   | 'studyFirst'
   | 'studySecond'
   | 'distractor'
@@ -23,6 +24,7 @@ export const EXPERIMENT_STEPS: readonly ExperimentStep[] = [
   'landing',
   'consent',
   'imagery',
+  'studyDuration',
   'studyFirst',
   'studySecond',
   'distractor',
@@ -37,6 +39,7 @@ export const STEP_LABELS: Record<ExperimentStep, string> = {
   landing: 'Welcome',
   consent: 'Consent',
   imagery: 'Mental Imagery',
+  studyDuration: 'Study Time',
   studyFirst: 'Study Phase 1',
   studySecond: 'Study Phase 2',
   distractor: 'Task Break',
@@ -70,6 +73,11 @@ interface ExperimentState {
   tabHiddenByPhase: Record<string, boolean>;
   recallResults: RecallCompletionPayload[];
 
+  // User-chosen study duration (180, 240, or 360 seconds, default 240)
+  studySeconds: number;
+  tutorialSkipped: boolean;
+  palaceUsedFreewalk: boolean;
+
   // Palace specific metrics
   palaceMode: 'guided' | 'freewalk' | null;
   tutorialDurationMs: number | null;
@@ -81,6 +89,11 @@ interface ExperimentState {
   // Distractor metrics
   distractorScore: number;
   distractorTotal: number;
+  distractorAttempted: number;
+  distractorCorrect: number;
+  distractorAccuracy: number;
+  distractorMedianMs: number;
+  distractorValid: boolean | null;
 
   // Session guard & interruption tracking
   sessionInterrupted: boolean;
@@ -91,6 +104,9 @@ interface ExperimentState {
   nextStep: () => void;
   prevStep: () => void;
   setParticipant: (id: string, code: string) => void;
+  setStudySeconds: (seconds: number) => void;
+  setTutorialSkipped: (skipped: boolean) => void;
+  setPalaceUsedFreewalk: (used: boolean) => void;
   setCounterbalanceAssignment: (assignment: CounterbalanceAssignment) => void;
   setShuffledWords: (wordsA: string[], wordsB: string[]) => void;
   setImageryRating: (questionId: number, rating: number) => void;
@@ -102,6 +118,13 @@ interface ExperimentState {
   initializeWordShuffles: () => void;
   recordPalaceMetrics: (payload: PalaceStudyCompletionPayload & { tutorialDurationMs: number }) => void;
   recordDistractorResult: (score: number, total: number, tabHidden: boolean) => void;
+  recordDistractorDetailed: (metrics: {
+    attempted: number;
+    correct: number;
+    accuracy: number;
+    medianMs: number;
+    valid: boolean;
+  }) => void;
   setSessionInterrupted: (val: boolean) => void;
   setStudyCompletedAt: (isoString: string) => void;
   setSessionCompletedAt: (isoString: string) => void;
@@ -128,6 +151,10 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   tabHiddenByPhase: {},
   recallResults: [],
 
+  studySeconds: 240,
+  tutorialSkipped: false,
+  palaceUsedFreewalk: false,
+
   palaceMode: null,
   tutorialDurationMs: null,
   palaceVisitsByLocus: {},
@@ -137,6 +164,11 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 
   distractorScore: 0,
   distractorTotal: 0,
+  distractorAttempted: 0,
+  distractorCorrect: 0,
+  distractorAccuracy: 0,
+  distractorMedianMs: 0,
+  distractorValid: null,
 
   sessionInterrupted: false,
   studyCompletedAt: null,
@@ -162,6 +194,17 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 
   setParticipant: (id: string, code: string) =>
     set({ participantId: id, participantCode: code }),
+
+  setStudySeconds: (seconds: number) => {
+    // Only permit valid durations: 180, 240, 360
+    if ([180, 240, 360].includes(seconds)) {
+      set({ studySeconds: seconds });
+    }
+  },
+
+  setTutorialSkipped: (skipped: boolean) => set({ tutorialSkipped: skipped }),
+
+  setPalaceUsedFreewalk: (used: boolean) => set({ palaceUsedFreewalk: used }),
 
   setCounterbalanceAssignment: (assignment: CounterbalanceAssignment) =>
     set({
@@ -205,14 +248,15 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   },
 
   recordPalaceMetrics: (payload) =>
-    set({
+    set((state) => ({
       palaceMode: payload.mode,
+      palaceUsedFreewalk: state.palaceUsedFreewalk || payload.mode === 'freewalk',
       tutorialDurationMs: payload.tutorialDurationMs,
       palaceVisitsByLocus: payload.visitsByLocus,
       palaceDwellMsByLocus: payload.dwellMsByLocus,
       webglFallbackUsed: payload.webglFallback,
       palaceAssetFallbackUsed: Boolean(payload.palaceAssetFallback),
-    }),
+    })),
 
   recordDistractorResult: (score: number, total: number, tabHidden: boolean) =>
     set((state) => ({
@@ -220,6 +264,17 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       distractorTotal: total,
       tabHiddenByPhase: { ...state.tabHiddenByPhase, distractor: tabHidden },
     })),
+
+  recordDistractorDetailed: (metrics) =>
+    set({
+      distractorScore: metrics.correct,
+      distractorTotal: metrics.attempted,
+      distractorAttempted: metrics.attempted,
+      distractorCorrect: metrics.correct,
+      distractorAccuracy: metrics.accuracy,
+      distractorMedianMs: metrics.medianMs,
+      distractorValid: metrics.valid,
+    }),
 
   setSessionInterrupted: (val: boolean) => set({ sessionInterrupted: val }),
 
@@ -244,6 +299,9 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       shuffledWordsB: LIST_B.map((w) => w.word),
       tabHiddenByPhase: {},
       recallResults: [],
+      studySeconds: 240,
+      tutorialSkipped: false,
+      palaceUsedFreewalk: false,
       palaceMode: null,
       tutorialDurationMs: null,
       palaceVisitsByLocus: {},
@@ -252,6 +310,11 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       palaceAssetFallbackUsed: false,
       distractorScore: 0,
       distractorTotal: 0,
+      distractorAttempted: 0,
+      distractorCorrect: 0,
+      distractorAccuracy: 0,
+      distractorMedianMs: 0,
+      distractorValid: null,
       sessionInterrupted: false,
       studyCompletedAt: null,
       sessionCompletedAt: null,

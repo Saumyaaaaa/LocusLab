@@ -1,4 +1,4 @@
-// Free recall test component with paste prevention, removable word chips, 3-minute auto-submit, and response latency tracking.
+// Free recall test component with paste prevention, removable word chips, 2-minute timer, inactivity prompt, and early submit button.
 import React, { useState, useRef, useEffect } from 'react';
 import { WordItem } from '../data/lists';
 import { useTimestampTimer } from '../hooks/useTimestampTimer';
@@ -25,7 +25,7 @@ interface RecallTestProps {
   phase: string;
   targetWords: readonly WordItem[];
   title?: string;
-  durationSeconds?: number; // 180 seconds (3 minutes)
+  durationSeconds?: number; // 120 seconds (2 minutes)
   onComplete: (payload: RecallCompletionPayload) => void;
 }
 
@@ -34,14 +34,16 @@ export const RecallTest: React.FC<RecallTestProps> = ({
   phase,
   targetWords,
   title = 'Recall Test',
-  durationSeconds = 180,
+  durationSeconds = 120,
   onComplete,
 }) => {
   const [inputText, setInputText] = useState('');
   const [recordedList, setRecordedList] = useState<RecordedRecallResponse[]>([]);
   const [pasteWarning, setPasteWarning] = useState(false);
+  const [showInactivityPrompt, setShowInactivityPrompt] = useState(false);
 
   const startTimeRef = useRef<number>(Date.now());
+  const lastEntryTimeRef = useRef<number>(Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
   const submittedRef = useRef(false);
 
@@ -94,6 +96,18 @@ export const RecallTest: React.FC<RecallTestProps> = ({
   // Focus input automatically on mount
   useEffect(() => {
     inputRef.current?.focus();
+    lastEntryTimeRef.current = Date.now();
+  }, []);
+
+  // Monitor 40-second inactivity with no new word entered
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (Date.now() - lastEntryTimeRef.current >= 40000 && !submittedRef.current) {
+        setShowInactivityPrompt(true);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleAddWord = (e?: React.FormEvent) => {
@@ -108,6 +122,8 @@ export const RecallTest: React.FC<RecallTestProps> = ({
 
     setRecordedList((prev) => [...prev, newResponse]);
     setInputText('');
+    lastEntryTimeRef.current = Date.now();
+    setShowInactivityPrompt(false);
     inputRef.current?.focus();
   };
 
@@ -128,7 +144,16 @@ export const RecallTest: React.FC<RecallTestProps> = ({
 
   return (
     <div className="card" role="region" aria-label="Free Recall Test">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 'var(--space-4)',
+          flexWrap: 'wrap',
+          gap: 'var(--space-2)',
+        }}
+      >
         <span className="badge">{title}</span>
         <div
           style={{
@@ -136,9 +161,12 @@ export const RecallTest: React.FC<RecallTestProps> = ({
             fontSize: 'var(--font-size-lg)',
             fontWeight: 700,
             padding: 'var(--space-1) var(--space-4)',
-            backgroundColor: remainingSeconds <= 30 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)',
-            color: remainingSeconds <= 30 ? 'var(--color-danger)' : 'var(--color-primary)',
+            backgroundColor: remainingSeconds <= 20 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)',
+            color: remainingSeconds <= 20 ? 'var(--color-danger)' : 'var(--color-primary)',
             borderRadius: 'var(--radius-full)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
           }}
           aria-live="polite"
           aria-label={`Time remaining: ${formattedTime}`}
@@ -147,55 +175,81 @@ export const RecallTest: React.FC<RecallTestProps> = ({
         </div>
       </div>
 
-      <h2 className="title-lg">Type All Words You Remember</h2>
+      <h2 className="title-lg">Type Every Word You Remember</h2>
       <p className="lead-text">
-        Type one word at a time and press <strong>Enter</strong>. You have 3 minutes for this list.
+        Recall as many words as you can from this list in any order. Minor spelling mistakes are automatically tolerated.
       </p>
+
+      {/* Gentle non-blocking prompt after 40 seconds of inactivity */}
+      {showInactivityPrompt && (
+        <div
+          role="status"
+          style={{
+            margin: 'var(--space-3) 0',
+            padding: 'var(--space-3) var(--space-4)',
+            backgroundColor: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: 'var(--radius-md)',
+            color: '#1e40af',
+            fontSize: 'var(--font-size-xs)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '8px',
+          }}
+        >
+          <span>💬 <em>Finished? You can submit now if you cannot remember any more words.</em></span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleManualSubmit}
+            style={{ padding: '2px 8px', fontSize: '11px' }}
+          >
+            Submit Now
+          </button>
+        </div>
+      )}
 
       {pasteWarning && (
         <div
           role="alert"
           style={{
-            backgroundColor: 'var(--color-warning-bg)',
-            color: 'var(--color-warning)',
-            padding: 'var(--space-3)',
+            color: 'var(--color-danger)',
+            backgroundColor: 'var(--color-danger-bg)',
+            padding: 'var(--space-2) var(--space-3)',
             borderRadius: 'var(--radius-sm)',
-            marginBottom: 'var(--space-4)',
             fontSize: 'var(--font-size-sm)',
+            marginBottom: 'var(--space-3)',
           }}
         >
-          ⚠️ Pasting is disabled during recall tests to preserve experiment validity. Please type words manually.
+          ⚠️ Pasting is disabled to ensure authentic memory recall.
         </div>
       )}
 
       {/* Word Input Form */}
-      <form onSubmit={handleAddWord} style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+      <form onSubmit={handleAddWord} style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
         <input
           ref={inputRef}
           type="text"
+          className="input-field"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            setInputText(e.target.value);
+            lastEntryTimeRef.current = Date.now();
+          }}
           onPaste={handlePaste}
-          placeholder="Type a remembered word and press Enter..."
+          placeholder="Type a word and press Enter..."
+          aria-label="Enter recalled word"
           autoComplete="off"
           autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          inputMode="text"
-          style={{
-            flex: 1,
-            padding: 'var(--space-3) var(--space-4)',
-            fontSize: 'var(--font-size-base)',
-            borderRadius: 'var(--radius-md)',
-            border: '2px solid var(--color-surface-border)',
-            backgroundColor: 'var(--color-surface)',
-          }}
-          aria-label="Recall word input"
+          spellCheck="false"
         />
         <button
           type="submit"
           className="btn btn-primary"
-          disabled={!inputText.trim()}
+          style={{ whiteSpace: 'nowrap' }}
+          aria-label="Add word to your recall list"
         >
           Add Word
         </button>
@@ -277,10 +331,17 @@ export const RecallTest: React.FC<RecallTestProps> = ({
       </div>
 
       {/* Submission Actions */}
-      <div className="button-bar">
-        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-          Tip: You can submit early or wait for the 3-minute timer to auto-submit.
-        </div>
+      <div className="button-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handleManualSubmit}
+          aria-label="I can't remember any more words - submit test"
+          style={{ fontSize: 'var(--font-size-sm)' }}
+        >
+          I can't remember any more
+        </button>
+
         <button
           type="button"
           className="btn btn-primary"

@@ -139,9 +139,17 @@ All data tables (`participants`, `sessions`, `responses`) are guarded with stric
 - `palace_list` (text): Stimulus list assigned to palace (`'listA'` | `'listB'`).
 - `immediate_test_order` (text): Counterbalanced recall order (`'A_first'` | `'B_first'`).
 - `word_order` (jsonb): Per-participant randomized word order for List A and List B.
+- `study_seconds` (int): User-chosen study duration per condition (`180`, `240`, or `360` seconds; default `240` / 4 min). Symmetrically applied to both Palace and Flashcard conditions; protected from changes once set.
 - `imagery_score` (numeric): Mean vividness rating (1.00 to 5.00) from 5 randomized questions.
 - `palace_mode` (text): Palace mode utilized (`'guided'` | `'freewalk'`).
+- `palace_used_freewalk` (bool): `true` if participant activated free-walk mode at any point during 3D study.
 - `tutorial_ms` (int): Duration spent in pre-study controls tutorial.
+- `tutorial_skipped` (bool): `true` if participant clicked "Skip tutorial" during 3D palace orientation.
+- `distractor_attempted` (int): Total number of arithmetic distractor questions answered.
+- `distractor_correct` (int): Number of arithmetic distractor questions answered correctly.
+- `distractor_accuracy` (numeric): Distractor accuracy ratio (`0.00` to `1.00`).
+- `distractor_median_ms` (int): Median response latency (ms) across arithmetic distractor answers.
+- `distractor_valid` (bool): Quality control flag (`attempted >= 5 AND accuracy >= 0.60 AND median_ms >= 1000 AND not all same answer`).
 - `webgl_fallback` (bool): `true` if participant used the accessible text route fallback.
 - `flashcard_tab_hidden` (bool): `true` if browser tab lost visibility during flashcards study.
 - `palace_tab_hidden` (bool): `true` if browser tab lost visibility during 3D palace study.
@@ -154,6 +162,16 @@ All data tables (`participants`, `sessions`, `responses`) are guarded with stric
 - `viewport_h` (int): Viewport height in CSS pixels at study onset (non-identifying device covariate).
 - `device_class` (text): Device form factor (`'phone'`, `'tablet'`, or `'desktop'`) based on CSS dimensions.
 - `input_type` (text): Primary input modality (`'touch'` or `'mouse'`).
+
+### `distractor_items` Table
+- `id` (uuid, PK): Item attempt UUID.
+- `participant_id` (uuid, FK $\to$ participants.id, Cascade Delete).
+- `problem_index` (int): Sequential index of the math problem (0-indexed).
+- `problem_text` (text): Arithmetic problem presented (e.g. `'47 + 28'`).
+- `user_answer` (int): Number typed and submitted by the participant.
+- `correct_answer` (int): Correct mathematical result.
+- `is_correct` (bool): `true` if `user_answer == correct_answer`.
+- `response_time_ms` (int): Milliseconds elapsed between problem presentation and submission.
 
 ### `sessions` Table
 - `id` (uuid, PK): Session UUID.

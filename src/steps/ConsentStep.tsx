@@ -18,6 +18,7 @@ export const ConsentStep: React.FC = () => {
     setParticipant,
     setCounterbalanceAssignment,
     setShuffledWords,
+    setStudySeconds,
   } = useExperimentStore();
 
   const [isAdult, setIsAdult] = useState(false);
@@ -51,7 +52,7 @@ export const ConsentStep: React.FC = () => {
       if (currentUser?.id) {
         const { data: existingParticipant } = await supabase
           .from('participants')
-          .select('id, code, condition_order, palace_list, immediate_test_order, word_order')
+          .select('id, code, condition_order, palace_list, immediate_test_order, word_order, study_seconds')
           .eq('id', currentUser.id)
           .maybeSingle();
 
@@ -71,6 +72,9 @@ export const ConsentStep: React.FC = () => {
               existingParticipant.word_order.listA || [],
               existingParticipant.word_order.listB || []
             );
+          }
+          if (existingParticipant.study_seconds) {
+            setStudySeconds(existingParticipant.study_seconds);
           }
           setCodeGenerated(true);
           return;
@@ -247,7 +251,10 @@ export const ConsentStep: React.FC = () => {
         <p style={{ marginBottom: 'var(--space-3)' }}>
           <strong>Citizen Science Status:</strong> This is a self-directed, independent educational and scientific investigation. It is <strong>NOT</strong> an IRB-approved medical study and is <strong>NOT</strong> a medical or diagnostic tool.
         </p>
-        <p>
+        <p style={{ marginBottom: 'var(--space-3)' }}>
+          <strong>Session Duration:</strong> Approximately 12–18 minutes today. You will select your study round length (3, 4, or 6 minutes per method) before studying begins. Follow-up recall tests take 2–3 minutes each after 24 hours and 7 days.
+        </p>
+        <p style={{ marginBottom: 'var(--space-3)' }}>
           <strong>Voluntary Participation:</strong> Participation is completely voluntary. You may stop at any point. You will receive an anonymous 8-character code that allows you to delete all your recorded data at any time.
         </p>
       </div>

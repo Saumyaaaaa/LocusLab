@@ -611,7 +611,7 @@ export const ReturnPage: React.FC = () => {
     const isListA = currentTestList === 'A';
     const targetWords = isListA ? LIST_A : LIST_B;
     const listId = isListA ? 'listA' : 'listB';
-    const testTitle = `${activePhase === '24h' ? '24-Hour' : '7-Day'} Recall Test: List ${currentTestList} (3 Minutes)`;
+    const testTitle = `${activePhase === '24h' ? '24-Hour' : '7-Day'} Recall Test: List ${currentTestList} (2 Minutes)`;
 
     return (
       <div>
@@ -632,7 +632,7 @@ export const ReturnPage: React.FC = () => {
           phase={activePhase}
           targetWords={targetWords}
           title={testTitle}
-          durationSeconds={180}
+          durationSeconds={120}
           onComplete={handleRecallTestComplete}
         />
 
@@ -675,7 +675,7 @@ export const ReturnPage: React.FC = () => {
 
         <div className="description-box" style={{ lineHeight: 1.6, margin: 'var(--space-4) 0' }}>
           <p style={{ marginBottom: 'var(--space-2)' }}>
-            <strong>Format:</strong> You will have 3 minutes per word list to type as many words as you remember.
+            <strong>Format:</strong> You will have 2 minutes per word list to type as many words as you remember.
           </p>
           <p style={{ marginBottom: 'var(--space-2)' }}>
             <strong>Rules:</strong> Exactly one continuous attempt. Pasting is disabled. No correctness feedback is displayed.

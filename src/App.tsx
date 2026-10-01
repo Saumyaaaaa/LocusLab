@@ -6,6 +6,7 @@ import { InterruptionNotice } from './components/InterruptionNotice';
 import { LandingStep } from './steps/LandingStep';
 import { ConsentStep } from './steps/ConsentStep';
 import { ImageryStep } from './steps/ImageryStep';
+import { StudyDurationStep } from './steps/StudyDurationStep';
 import { StudyFirstStep } from './steps/StudyFirstStep';
 import { StudySecondStep } from './steps/StudySecondStep';
 import { DistractorStep } from './steps/DistractorStep';
@@ -98,6 +99,8 @@ export const App: React.FC = () => {
         return <ConsentStep />;
       case 'imagery':
         return <ImageryStep />;
+      case 'studyDuration':
+        return <StudyDurationStep />;
       case 'studyFirst':
         return <StudyFirstStep />;
       case 'studySecond':

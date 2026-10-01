@@ -1,10 +1,12 @@
 // Primary 3D memory palace study scene with full-viewport immersion, dedicated non-overlapping word panel, and responsive camera framing.
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { PointerLockControls, useProgress } from '@react-three/drei';
+import { useProgress } from '@react-three/drei';
 import { PALACE_LOCI, LocusData } from '../../data/loci';
 import { PalaceHouse } from './PalaceHouse';
 import { GuidedCameraController } from './GuidedCameraController';
+import { FreeWalkCameraController } from './FreeWalkCameraController';
+import { OnScreenJoystick } from './OnScreenJoystick';
 import { RouteTextFallback } from './RouteTextFallback';
 import { isWebGLAvailable } from '../../lib/webglCheck';
 import { useTimestampTimer } from '../../hooks/useTimestampTimer';
@@ -67,7 +69,7 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   loadTimeoutMs = 20000,
   onComplete,
 }) => {
-  const { participantId } = useExperimentStore();
+  const { participantId, setPalaceUsedFreewalk } = useExperimentStore();
   const [webglSupported] = useState(() => isWebGLAvailable());
   const [useTextFallback] = useState(!webglSupported);
   const [firstOperationalFrameRendered, setFirstOperationalFrameRendered] = useState(false);
@@ -77,6 +79,8 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   const [isFreeWalk, setIsFreeWalk] = useState(false);
   const [usedFreeWalk, setUsedFreeWalk] = useState(false);
   const [recenterTrigger, setRecenterTrigger] = useState(0);
+  const [takeMeThereTrigger, setTakeMeThereTrigger] = useState(0);
+  const moveVectorRef = useRef({ x: 0, z: 0 });
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [showExtendedHelp, setShowExtendedHelp] = useState(false);
 
@@ -207,12 +211,11 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
     [recordDwell]
   );
 
-  // Keyboard navigation shortcuts: Space/ArrowRight (Next), ArrowLeft (Prev)
+  // Keyboard navigation shortcuts: Space or N (Next), P (Prev) in both modes; Arrow keys in guided mode
   useEffect(() => {
     if (useTextFallback) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isFreeWalk) return;
       if (e.repeat) return; // Ignore auto-repeat when holding down key
 
       // Never intercept when user is focused inside a text input or textarea
@@ -223,10 +226,14 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
         target?.getAttribute('contenteditable') === 'true';
       if (isInput) return;
 
-      if (e.code === 'Space' || e.key === ' ' || e.key === 'ArrowRight') {
+      const code = e.code.toLowerCase();
+      const key = e.key.toLowerCase();
+
+      // Space or N advances Next; P advances Prev (works in BOTH modes!)
+      if (code === 'space' || key === ' ' || key === 'n' || (!isFreeWalk && key === 'arrowright')) {
         e.preventDefault(); // Prevent page scrolling on Space
         handleNextLocus();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (key === 'p' || (!isFreeWalk && key === 'arrowleft')) {
         e.preventDefault();
         handlePrevLocus();
       }
@@ -260,7 +267,7 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
     });
   };
 
-  // 6-Minute Timer: Starts ONLY when all models have loaded AND the first 3D frame has rendered
+  // Study Timer: Starts ONLY when all models have loaded AND the first 3D frame has rendered
   const { formattedTime, tabHidden, remainingSeconds } = useTimestampTimer({
     durationSeconds,
     isActive: isSceneOperational || useTextFallback,
@@ -270,9 +277,23 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
   const handleToggleFreeWalk = () => {
     setIsFreeWalk((prev) => {
       const next = !prev;
-      if (next) setUsedFreeWalk(true);
+      if (next) {
+        setUsedFreeWalk(true);
+        setPalaceUsedFreewalk(true);
+        if (participantId && isSupabaseConfigured) {
+          supabase
+            .from('participants')
+            .update({ palace_used_freewalk: true })
+            .eq('id', participantId)
+            .then(() => {}, () => {});
+        }
+      }
       return next;
     });
+  };
+
+  const handleTakeMeThere = () => {
+    setTakeMeThereTrigger((prev) => prev + 1);
   };
 
   const handleRecenter = () => {
@@ -409,6 +430,27 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
 
         {/* Right: Controls & Delete Data */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isFreeWalk && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleTakeMeThere}
+              style={{
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                minHeight: '32px',
+                backgroundColor: '#e0e7ff',
+                color: '#4338ca',
+                borderColor: '#c7d2fe',
+              }}
+              title="Fly camera directly to current locus"
+              aria-label="Take me to current locus"
+            >
+              📍 Take me there
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-secondary"
@@ -549,10 +591,19 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
                   maxWidth: '360px',
                 }}
               >
-                ⏱ The 6-minute study countdown starts once all 3D assets have fully loaded.
+                ⏱ The {Math.round(durationSeconds / 60)}-minute study countdown starts once all 3D assets have fully loaded.
               </div>
             </div>
           )}
+
+          {/* Virtual Joystick for mobile/touch free-walk navigation */}
+          {isFreeWalk &&
+            (isMobilePortrait ||
+              isPhoneLandscape ||
+              (typeof window !== 'undefined' &&
+                ('ontouchstart' in window || navigator.maxTouchPoints > 0))) && (
+              <OnScreenJoystick moveVectorRef={moveVectorRef} />
+            )}
 
           <Canvas
             dpr={[1, 1.5]}
@@ -597,7 +648,13 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
                 cameraTargetOverride={cameraTargetOverride}
               />
             ) : (
-              <PointerLockControls />
+              <FreeWalkCameraController
+                isFreeWalk={isFreeWalk}
+                takeMeThereTrigger={takeMeThereTrigger}
+                targetLocusPosition={currentLocus.position}
+                targetCameraPosition={currentLocus.cameraPosition}
+                moveVectorRef={moveVectorRef}
+              />
             )}
           </Canvas>
         </div>
@@ -745,48 +802,76 @@ export const PalaceScene: React.FC<PalaceSceneProps> = ({
           <div
             style={{
               display: 'flex',
-              gap: '10px',
+              flexDirection: 'column',
+              gap: '8px',
               marginTop: '4px',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
           >
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handlePrevLocus}
-              style={{
-                minHeight: '48px',
-                minWidth: '90px',
-                padding: '0 16px',
-                fontSize: '14px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              aria-label="Previous locus"
-            >
-              &larr; Prev
-            </button>
+            {isFreeWalk && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleTakeMeThere}
+                style={{
+                  minHeight: '38px',
+                  padding: '0 12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  backgroundColor: '#e0e7ff',
+                  color: '#4338ca',
+                  borderColor: '#c7d2fe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+                aria-label={`Take me to Locus ${currentLocus.id}: ${currentLocus.name}`}
+              >
+                <span>📍</span>
+                <span>Take me to #{currentLocus.id} ({currentLocus.name})</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleNextLocus}
-              style={{
-                flex: 1,
-                minHeight: '48px',
-                padding: '0 18px',
-                fontSize: '14px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              aria-label="Next locus (Space or tap)"
-            >
-              Next Locus (Space) &rarr;
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handlePrevLocus}
+                style={{
+                  minHeight: '48px',
+                  minWidth: '90px',
+                  padding: '0 16px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label="Previous locus (P)"
+              >
+                &larr; Prev (P)
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleNextLocus}
+                style={{
+                  flex: 1,
+                  minHeight: '48px',
+                  padding: '0 18px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label="Next locus (Space or N)"
+              >
+                Next Locus (Space / N) &rarr;
+              </button>
+            </div>
           </div>
         </aside>
       </div>

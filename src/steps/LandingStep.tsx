@@ -1,4 +1,4 @@
-// Landing view introducing the 25-minute memory experiment and confirming 18+ eligibility.
+// Landing view introducing the 12-18 minute memory experiment and confirming 18+ eligibility.
 import React from 'react';
 import { useExperimentStore } from '../store/useExperimentStore';
 
@@ -19,7 +19,7 @@ export const LandingStep: React.FC = () => {
 
       <div className="description-box">
         <p style={{ marginBottom: 'var(--space-2)' }}>
-          The initial study and recall session takes approximately 25 minutes, with no sign-up or account required.
+          The initial study and recall session takes approximately 12–18 minutes (depending on your chosen study round length: 3, 4, or 6 minutes), with no sign-up or account required.
         </p>
         <p>
           Participation is voluntary, fully anonymous, and strictly limited to adults aged 18 and older.

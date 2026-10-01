@@ -49,6 +49,14 @@ ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS viewport_w int;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS viewport_h int;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS device_class text;
 ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS input_type text;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS study_seconds int DEFAULT 240;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS tutorial_skipped bool DEFAULT false;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS palace_used_freewalk bool DEFAULT false;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_attempted int DEFAULT 0;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_correct int DEFAULT 0;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_accuracy numeric;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_median_ms int;
+ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS distractor_valid bool;
 
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS late bool DEFAULT false;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS start_hour int;
@@ -61,16 +69,32 @@ ALTER TABLE public.responses ADD COLUMN IF NOT EXISTS tab_hidden bool DEFAULT fa
 ALTER TABLE public.responses ADD COLUMN IF NOT EXISTS intrusion_seq int DEFAULT 0;
 ALTER TABLE public.responses ALTER COLUMN typed_answer DROP NOT NULL;
 
+-- Distractor items table for fine-grained arithmetic logs
+CREATE TABLE IF NOT EXISTS public.distractor_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  participant_id uuid NOT NULL REFERENCES public.participants(id) ON DELETE CASCADE,
+  item_index int NOT NULL,
+  problem text NOT NULL,
+  answer int NOT NULL,
+  correct bool NOT NULL,
+  response_ms int NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_distractor_items_participant ON public.distractor_items(participant_id);
+
 -- 3. Grants strictly limited to authenticated role (no anon data table grants)
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.participants TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.sessions TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.responses TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.distractor_items TO authenticated;
 
 -- 4. Enable Row Level Security (RLS) on all tables
 ALTER TABLE public.participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.distractor_items ENABLE ROW LEVEL SECURITY;
 
 -- 5. Strict RLS Policies for participants table
 -- Only authenticated users can insert, and ONLY under their own auth.uid()
@@ -166,7 +190,29 @@ CREATE POLICY "Users can delete own responses"
   TO authenticated
   USING (participant_id = auth.uid());
 
--- 8. Indexes for performant lookup & idempotent upserts
+-- 8. Strict RLS Policies for distractor_items table
+DROP POLICY IF EXISTS "Users can insert own distractor items" ON public.distractor_items;
+CREATE POLICY "Users can insert own distractor items"
+  ON public.distractor_items
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (participant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can read own distractor items" ON public.distractor_items;
+CREATE POLICY "Users can read own distractor items"
+  ON public.distractor_items
+  FOR SELECT
+  TO authenticated
+  USING (participant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can delete own distractor items" ON public.distractor_items;
+CREATE POLICY "Users can delete own distractor items"
+  ON public.distractor_items
+  FOR DELETE
+  TO authenticated
+  USING (participant_id = auth.uid());
+
+-- 9. Indexes for performant lookup & idempotent upserts
 CREATE INDEX IF NOT EXISTS idx_participants_code ON public.participants(code);
 CREATE INDEX IF NOT EXISTS idx_sessions_participant ON public.sessions(participant_id);
 CREATE INDEX IF NOT EXISTS idx_responses_participant ON public.responses(participant_id);
@@ -187,7 +233,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_responses_upsert_key
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_participant_phase
   ON public.sessions(participant_id, phase);
 
--- 9. Server-authoritative session_completed_at trigger
+-- 10. Server-authoritative session_completed_at trigger
 -- Sets session_completed_at = now() on first update, preserves it permanently against alteration
 CREATE OR REPLACE FUNCTION public.set_session_completed_at()
 RETURNS TRIGGER AS $$
@@ -207,7 +253,7 @@ CREATE TRIGGER trigger_set_session_completed_at
   FOR EACH ROW
   EXECUTE FUNCTION public.set_session_completed_at();
 
--- 10. Immutability triggers: prevent participants from modifying assigned experimental conditions
+-- 11. Immutability triggers: prevent participants from modifying assigned experimental conditions
 CREATE OR REPLACE FUNCTION public.check_participants_immutability()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -234,6 +280,9 @@ BEGIN
   END IF;
   IF (OLD.cohort IS NOT NULL AND NEW.cohort IS DISTINCT FROM OLD.cohort) THEN
     RAISE EXCEPTION 'Cannot modify immutable column cohort';
+  END IF;
+  IF (OLD.study_seconds IS NOT NULL AND NEW.study_seconds IS DISTINCT FROM OLD.study_seconds) THEN
+    RAISE EXCEPTION 'Cannot modify immutable column study_seconds';
   END IF;
   RETURN NEW;
 END;

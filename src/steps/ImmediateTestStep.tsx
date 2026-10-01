@@ -120,7 +120,7 @@ export const ImmediateTestStep: React.FC = () => {
   const isListA = currentTestList === 'A';
   const targetWords = isListA ? LIST_A : LIST_B;
   const listId = isListA ? 'listA' : 'listB';
-  const listTitle = `Immediate Recall Test: List ${currentTestList} (3 Minutes)`;
+  const listTitle = `Immediate Recall Test: List ${currentTestList} (2 Minutes)`;
 
   return (
     <div>
@@ -146,7 +146,7 @@ export const ImmediateTestStep: React.FC = () => {
         phase="immediateTest"
         targetWords={targetWords}
         title={listTitle}
-        durationSeconds={180}
+        durationSeconds={120}
         onComplete={handleTestComplete}
       />
     </div>

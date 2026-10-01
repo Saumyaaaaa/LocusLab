@@ -30,14 +30,15 @@ interface RecallTestProps {
 }
 
 /**
- * Splits raw recall input on commas and newlines only.
- * Spaces do NOT split tokens (e.g. "flag rope" -> ["flag rope"], "flag, rope" -> ["flag", "rope"]).
+ * Splits raw recall input on commas, newlines, and whitespace (/[\s,]+/).
+ * Each stimulus word is a single word (e.g. "flag rope" -> ["flag", "rope"], "flag, rope" -> ["flag", "rope"]).
+ * Empty tokens are dropped.
  */
 export function parseRecallInput(raw: string): string[] {
   const clean = raw.trim();
   if (!clean) return [];
   return clean
-    .split(/[\n,]+/)
+    .split(/[\s,]+/)
     .map((t) => t.trim())
     .filter(Boolean);
 }
@@ -243,7 +244,7 @@ export const RecallTest: React.FC<RecallTestProps> = ({
       )}
 
       {/* Word Input Form */}
-      <form onSubmit={handleAddWord} style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+      <form onSubmit={handleAddWord} style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
         <input
           ref={inputRef}
           type="text"
@@ -254,8 +255,8 @@ export const RecallTest: React.FC<RecallTestProps> = ({
             lastEntryTimeRef.current = Date.now();
           }}
           onPaste={handlePaste}
-          placeholder="Type a word and press Enter..."
-          aria-label="Enter recalled word"
+          placeholder="Type a word and press Enter, or separate words with spaces or commas"
+          aria-label="Enter recalled words (separate with spaces or commas)"
           autoComplete="off"
           autoCorrect="off"
           spellCheck="false"
@@ -269,6 +270,9 @@ export const RecallTest: React.FC<RecallTestProps> = ({
           Add Word
         </button>
       </form>
+      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
+        Type a word and press Enter, or separate words with spaces or commas
+      </div>
 
       {/* Words Entered Chips (No correct/incorrect feedback shown!) */}
       <div style={{ marginBottom: 'var(--space-6)' }}>

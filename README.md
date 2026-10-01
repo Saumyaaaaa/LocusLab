@@ -199,7 +199,7 @@ All data tables (`participants`, `sessions`, `responses`) are guarded with stric
 - `intrusion_seq` (int): `0` for target stimulus rows; `1, 2, ...` for intrusions. Together with `(participant_id, phase, list_id, item_index, intrusion_seq)`, forms an authoritative composite unique index that guarantees idempotent upserts so network retries never duplicate rows.
 
 > [!NOTE]
-> **Token Ingestion & Multi-Response Ingestion**: During free recall tests, raw participant inputs are parsed by splitting on commas and newlines only (`/[\n,]+/`). For example, typing `"flag, rope"` or `"flag\nrope"` produces two distinct word chips/responses. Spaces do not split words, so `"flag rope"` remains a single entry. Consequently, a single user input or paste event may produce multiple recorded responses. Duplicate inputs for the same target word (e.g. typing `"flag, flag"`) are credited only once: the first match receives `correct: true`, while subsequent occurrences are evaluated as duplicates with `correct: false`.
+> **Token Ingestion & Multi-Response Ingestion**: During free recall tests, raw participant inputs are parsed by splitting on commas, newlines, and whitespace (`/[\s,]+/`), since every stimulus word is a single word. For example, typing `"flag rope"`, `"flag, rope"`, or `"flag\nrope"` produces two distinct word chips/responses. Empty tokens are dropped. Consequently, a single user input or paste event may produce multiple recorded responses. Duplicate inputs for the same target word (e.g. typing `"flag flag"` or `"flag, flag"`) are credited only once: the first match receives `correct: true`, while subsequent occurrences are evaluated as duplicates with `correct: false`.
 
 ---
 

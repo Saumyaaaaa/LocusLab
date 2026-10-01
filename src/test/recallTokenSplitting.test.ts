@@ -1,4 +1,4 @@
-// Unit and integration tests for comma/newline token splitting, space preservation, and duplicate handling in RecallTest.
+// Unit and integration tests for whitespace, comma, and newline token splitting and duplicate handling in RecallTest.
 import { describe, it, expect } from 'vitest';
 import { parseRecallInput, RecallCompletionPayload } from '../components/RecallTest';
 import { scoreRecallResponses } from '../lib/scoring';
@@ -6,38 +6,40 @@ import { LIST_A } from '../data/lists';
 import { formatListRecallRows } from '../lib/responseQueue';
 
 describe('Recall Input Token Splitting & Duplicate Scoring Rules', () => {
-  it('splits "flag, rope" into TWO distinct chips/tokens', () => {
+  it('1. splits "flag, rope" into TWO distinct chips/tokens', () => {
     const tokens = parseRecallInput('flag, rope');
     expect(tokens).toEqual(['flag', 'rope']);
     expect(tokens).toHaveLength(2);
   });
 
-  it('keeps "flag rope" as ONE single chip/token without space splitting', () => {
+  it('2. splits "flag rope" (whitespace-separated) into TWO distinct chips/tokens', () => {
     const tokens = parseRecallInput('flag rope');
-    expect(tokens).toEqual(['flag rope']);
-    expect(tokens).toHaveLength(1);
+    expect(tokens).toEqual(['flag', 'rope']);
+    expect(tokens).toHaveLength(2);
   });
 
-  it('splits newline-separated inputs into distinct chips/tokens', () => {
+  it('3. splits newline-separated inputs into distinct chips/tokens', () => {
     const tokens = parseRecallInput('flag\nrope');
     expect(tokens).toEqual(['flag', 'rope']);
     expect(tokens).toHaveLength(2);
   });
 
-  it('handles mixed whitespace, multiple commas, and empty trailing lines cleanly', () => {
-    const tokens = parseRecallInput('  flag ,  , \n rope  \n ');
+  it('4. drops empty tokens from mixed whitespace, tabs, multiple commas, and trailing newlines', () => {
+    const tokens = parseRecallInput('  flag ,  , \t \n rope  \n ');
     expect(tokens).toEqual(['flag', 'rope']);
     expect(tokens).toHaveLength(2);
   });
 
-  it('scores duplicate inputs ("flag, flag") only once', () => {
-    // Both entries come from comma splitting of "flag, flag"
-    const tokens = parseRecallInput('flag, flag');
-    expect(tokens).toHaveLength(2);
-    expect(tokens).toEqual(['flag', 'flag']);
+  it('5. scores duplicate inputs ("flag flag" and "flag, flag") only once', () => {
+    // Test both space-separated and comma-separated duplicates
+    const tokensSpace = parseRecallInput('flag flag');
+    expect(tokensSpace).toEqual(['flag', 'flag']);
+
+    const tokensComma = parseRecallInput('flag, flag');
+    expect(tokensComma).toEqual(['flag', 'flag']);
 
     const targetWords = LIST_A.map((i) => i.word);
-    const scoreResult = scoreRecallResponses(tokens, targetWords);
+    const scoreResult = scoreRecallResponses(tokensSpace, targetWords);
 
     // First "flag" must be credited
     expect(scoreResult.evaluations[0].correct).toBe(true);
@@ -54,24 +56,24 @@ describe('Recall Input Token Splitting & Duplicate Scoring Rules', () => {
     expect(scoreResult.creditedWords).toEqual(['flag']);
   });
 
-  it('awards 2 correct hits for "flag, rope" and 0 correct hits for "flag rope" against LIST_A', () => {
+  it('6. awards 2 correct hits for both "flag, rope" and "flag rope" against LIST_A', () => {
     const targetWords = LIST_A.map((i) => i.word);
 
     // "flag, rope" -> two recognized target words in LIST_A
-    const tokensSplit = parseRecallInput('flag, rope');
-    const scoreSplit = scoreRecallResponses(tokensSplit, targetWords);
-    expect(scoreSplit.totalCorrect).toBe(2);
-    expect(scoreSplit.creditedWords).toEqual(['flag', 'rope']);
+    const tokensComma = parseRecallInput('flag, rope');
+    const scoreComma = scoreRecallResponses(tokensComma, targetWords);
+    expect(scoreComma.totalCorrect).toBe(2);
+    expect(scoreComma.creditedWords).toEqual(['flag', 'rope']);
 
-    // "flag rope" -> single unrecognized token, evaluated as intrusion/no-match
-    const tokensUnsplit = parseRecallInput('flag rope');
-    const scoreUnsplit = scoreRecallResponses(tokensUnsplit, targetWords);
-    expect(scoreUnsplit.totalCorrect).toBe(0);
-    expect(scoreUnsplit.evaluations[0].reason).toBe('no_match');
+    // "flag rope" -> two recognized target words in LIST_A
+    const tokensSpace = parseRecallInput('flag rope');
+    const scoreSpace = scoreRecallResponses(tokensSpace, targetWords);
+    expect(scoreSpace.totalCorrect).toBe(2);
+    expect(scoreSpace.creditedWords).toEqual(['flag', 'rope']);
   });
 
-  it('formats responses with idempotent keys for target and intrusion rows', () => {
-    const tokens = parseRecallInput('flag, rope, unknownWord1, unknownWord2');
+  it('7. formats responses with idempotent keys for target and intrusion rows', () => {
+    const tokens = parseRecallInput('flag rope unknownWord1, unknownWord2');
     const targetWords = LIST_A.map((i) => i.word);
     const scoreResult = scoreRecallResponses(tokens, targetWords);
 

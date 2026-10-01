@@ -337,6 +337,10 @@ export const ReturnPage: React.FC = () => {
     const res = await saveResponsesWithRetry(rows);
     setSaveStatus(res.success ? 'saved' : 'error');
 
+    if (!res.success) {
+      return;
+    }
+
     const firstList = participant.immediate_test_order === 'B_first' ? 'B' : 'A';
     const secondList = firstList === 'A' ? 'B' : 'A';
 

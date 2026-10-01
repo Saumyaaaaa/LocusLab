@@ -73,10 +73,10 @@ export interface RecallScoreResult {
  */
 export function evaluateSingleAnswer(
   typedRaw: string,
-  targetList: readonly string[],
+  targetList: readonly (string | { word: string })[],
   creditedWords: Set<string>
 ): ItemEvaluation {
-  const typed = typedRaw.trim().toLowerCase();
+  const typed = (typedRaw || '').trim().toLowerCase();
 
   if (!typed) {
     return {
@@ -88,20 +88,23 @@ export function evaluateSingleAnswer(
     };
   }
 
-  // Calculate distances to all target words
-  const distances = targetList.map((target) => ({
-    target,
-    normalized: target.toLowerCase(),
-    distance: levenshteinDistance(typed, target),
-  }));
+  // Calculate distances to all target words, extracting string representation safely
+  const distances = targetList.map((item) => {
+    const target = typeof item === 'string' ? item : item && typeof item === 'object' && 'word' in item ? (item as any).word : String(item || '');
+    return {
+      target,
+      normalized: target.toLowerCase(),
+      distance: levenshteinDistance(typed, target),
+    };
+  });
 
   distances.sort((a, b) => a.distance - b.distance);
 
   const bestMatch = distances[0];
-  const minDist = bestMatch.distance;
+  const minDist = bestMatch ? bestMatch.distance : 999;
 
   // Exact match (distance 0)
-  if (minDist === 0) {
+  if (minDist === 0 && bestMatch) {
     const targetKey = bestMatch.normalized;
     if (creditedWords.has(targetKey)) {
       return {
@@ -123,7 +126,7 @@ export function evaluateSingleAnswer(
   }
 
   // Distance 1 (Single character typo tolerance)
-  if (minDist === 1) {
+  if (minDist === 1 && bestMatch) {
     // Check for ambiguity (two different target words tied at distance 1)
     const tiedWords = distances.filter((d) => d.distance === 1);
     if (tiedWords.length > 1) {
@@ -181,21 +184,25 @@ export function evaluateSingleAnswer(
 
 /**
  * Evaluates an array of typed responses against a target word list.
+ * Supports both arrays of strings and arrays of { word: string } objects.
  */
 export function scoreRecallResponses(
   typedAnswers: readonly string[],
-  targetList: readonly string[]
+  targetList: readonly (string | { word: string })[]
 ): RecallScoreResult {
+  const normalizedTargetList: string[] = targetList.map((item) =>
+    typeof item === 'string' ? item : item && typeof item === 'object' && 'word' in item ? (item as any).word : String(item || '')
+  );
   const creditedWords = new Set<string>();
   const evaluations: ItemEvaluation[] = [];
 
   for (const answer of typedAnswers) {
-    const result = evaluateSingleAnswer(answer, targetList, creditedWords);
+    const result = evaluateSingleAnswer(answer, normalizedTargetList, creditedWords);
     evaluations.push(result);
   }
 
   const totalCorrect = creditedWords.size;
-  const targetCount = targetList.length;
+  const targetCount = normalizedTargetList.length;
   const accuracyPercent = targetCount > 0 ? Number(((totalCorrect / targetCount) * 100).toFixed(1)) : 0;
 
   return {

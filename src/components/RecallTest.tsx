@@ -58,14 +58,24 @@ export const RecallTest: React.FC<RecallTestProps> = ({
     const list = [...currentList];
     const trimmedInput = finalText.trim();
     if (trimmedInput) {
-      list.push({
-        typed: trimmedInput,
-        responseMs: Math.max(0, Date.now() - startTimeRef.current),
-      });
+      const tokens = trimmedInput.split(/[\n,]+/).map((t) => t.trim()).filter(Boolean);
+      if (tokens.length > 1) {
+        for (const token of tokens) {
+          list.push({
+            typed: token,
+            responseMs: Math.max(0, Date.now() - startTimeRef.current),
+          });
+        }
+      } else {
+        list.push({
+          typed: trimmedInput,
+          responseMs: Math.max(0, Date.now() - startTimeRef.current),
+        });
+      }
     }
 
     const typedStrings = list.map((item) => item.typed);
-    const targetStrings = targetWords.map((item) => item.word);
+    const targetStrings = targetWords.map((item) => typeof item === 'string' ? item : item.word);
     const scoreResult = scoreRecallResponses(typedStrings, targetStrings);
 
     // Attach evaluation to each response

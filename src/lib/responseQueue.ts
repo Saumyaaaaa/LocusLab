@@ -21,7 +21,7 @@ export interface FormattedResponseRow {
  */
 export function formatListRecallRows(
   payload: RecallCompletionPayload,
-  targetList: readonly WordItem[],
+  targetList: readonly (WordItem | string)[],
   participantId: string,
   condition: 'palace' | 'flashcard'
 ): FormattedResponseRow[] {
@@ -40,7 +40,7 @@ export function formatListRecallRows(
           responseMs: resp.responseMs,
         });
       }
-    } else if (resp.typed.trim()) {
+    } else if (resp.typed && resp.typed.trim()) {
       intrusionResponses.push({
         typed: resp.typed,
         responseMs: resp.responseMs,
@@ -48,13 +48,17 @@ export function formatListRecallRows(
     }
   }
 
+  // Normalize phase name for consistency (e.g. 'immediate' -> 'immediateTest')
+  const normalizedPhase = payload.phase === 'immediate' ? 'immediateTest' : payload.phase;
+
   // 1. Exactly 20 rows for the 20 target stimuli words
   targetList.forEach((item, index) => {
-    const match = matchedResponses.get(item.word.toLowerCase());
+    const wordStr = typeof item === 'string' ? item : item?.word || '';
+    const match = wordStr ? matchedResponses.get(wordStr.toLowerCase()) : undefined;
     if (match) {
       rows.push({
         participant_id: participantId,
-        phase: payload.phase,
+        phase: normalizedPhase,
         list_id: payload.listId,
         condition,
         item_index: index,
@@ -68,7 +72,7 @@ export function formatListRecallRows(
       // Missed word: typed_answer is null, correct is false
       rows.push({
         participant_id: participantId,
-        phase: payload.phase,
+        phase: normalizedPhase,
         list_id: payload.listId,
         condition,
         item_index: index,
@@ -85,7 +89,7 @@ export function formatListRecallRows(
   intrusionResponses.forEach((intrusion, idx) => {
     rows.push({
       participant_id: participantId,
-      phase: payload.phase,
+      phase: normalizedPhase,
       list_id: payload.listId,
       condition,
       item_index: -1,
@@ -102,6 +106,7 @@ export function formatListRecallRows(
 
 /**
  * Saves rows to Supabase via idempotent upsert with automatic retry on failure.
+ * If composite unique constraint is missing in remote DB, gracefully falls back to insert.
  */
 export async function saveResponsesWithRetry(
   rows: FormattedResponseRow[],
@@ -120,6 +125,24 @@ export async function saveResponsesWithRetry(
       if (!error) {
         return { success: true };
       }
+
+      // If constraint error (e.g. index not yet created in remote database), try fallback upsert without intrusion_seq
+      if (error.message && (error.message.includes('constraint') || error.message.includes('ON CONFLICT'))) {
+        const targetRows = rows.filter((r) => r.item_index >= 0);
+        const intrusionRows = rows.filter((r) => r.item_index === -1);
+
+        const { error: targetErr } = await supabase
+          .from('responses')
+          .upsert(targetRows, { onConflict: 'participant_id,phase,list_id,item_index' });
+
+        if (!targetErr) {
+          if (intrusionRows.length > 0) {
+            await supabase.from('responses').insert(intrusionRows);
+          }
+          return { success: true };
+        }
+      }
+
       attempt++;
       if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, attempt * 1200));

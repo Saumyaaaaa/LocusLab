@@ -4,6 +4,8 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ShareExperimentButton } from './ShareExperimentButton';
 import { DeleteDataModal } from './DeleteDataModal';
 
+import { useExperimentStore } from '../store/useExperimentStore';
+
 interface ResultsViewProps {
   participantId: string;
 }
@@ -16,9 +18,19 @@ interface TimepointScore {
 }
 
 interface ParticipantMeta {
+  palace_list?: string;
   imagery_score: number | null;
   palace_tab_hidden: boolean;
   flashcard_tab_hidden: boolean;
+}
+
+function normalizePhase(p: string): string {
+  if (!p) return '';
+  const lower = p.toLowerCase();
+  if (lower === 'immediate' || lower === 'immediatetest') return 'immediateTest';
+  if (lower === '24h' || lower === 'test24h') return '24h';
+  if (lower === '7d' || lower === 'test7d') return '7d';
+  return p;
 }
 
 export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
@@ -31,30 +43,34 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
 
   useEffect(() => {
     async function loadUserResults() {
-      if (!isSupabaseConfigured || !participantId) {
-        setLoading(false);
-        return;
-      }
+      const storeState = useExperimentStore.getState();
 
       try {
         // 1. Fetch only this participant's own responses via strict RLS
-        const { data: responses } = await supabase
-          .from('responses')
-          .select('phase, condition, correct, item_index, tab_hidden')
-          .eq('participant_id', participantId);
+        let responses: any[] | null = null;
+        let partData: any = null;
+        let sessions: any[] | null = null;
 
-        // 2. Fetch participant metadata
-        const { data: partData } = await supabase
-          .from('participants')
-          .select('imagery_score, palace_tab_hidden, flashcard_tab_hidden')
-          .eq('id', participantId)
-          .single();
+        if (isSupabaseConfigured && participantId) {
+          const resRes = await supabase
+            .from('responses')
+            .select('phase, condition, list_id, correct, item_index, tab_hidden')
+            .eq('participant_id', participantId);
+          responses = resRes.data;
 
-        // 3. Fetch session records to check for late tests
-        const { data: sessions } = await supabase
-          .from('sessions')
-          .select('phase, late, completed_at')
-          .eq('participant_id', participantId);
+          const partRes = await supabase
+            .from('participants')
+            .select('palace_list, imagery_score, palace_tab_hidden, flashcard_tab_hidden')
+            .eq('id', participantId)
+            .maybeSingle();
+          partData = partRes.data;
+
+          const sessRes = await supabase
+            .from('sessions')
+            .select('phase, late, completed_at')
+            .eq('participant_id', participantId);
+          sessions = sessRes.data;
+        }
 
         if (partData) {
           setMeta(partData as ParticipantMeta);
@@ -67,41 +83,72 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
         const tabSwitchInMeta = Boolean(partData?.palace_tab_hidden || partData?.flashcard_tab_hidden);
         setHasTabHidden(tabSwitchInResponses || tabSwitchInMeta);
 
-        // Calculate scores per completed timepoint
-        const timepointMap: Record<string, { label: string; palace: number; flashcard: number }> = {
-          immediateTest: { label: 'Immediate', palace: 0, flashcard: 0 },
-          '24h': { label: '24 Hours', palace: 0, flashcard: 0 },
-          '7d': { label: '7 Days', palace: 0, flashcard: 0 },
+        // Tracking stats per timepoint
+        const timepointStats: Record<
+          string,
+          { label: string; palaceTargets: number; flashcardTargets: number; palaceCorrect: number; flashcardCorrect: number }
+        > = {
+          immediateTest: { label: 'Immediate', palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
+          '24h': { label: '24 Hours', palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
+          '7d': { label: '7 Days', palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
         };
 
-        const activePhases = new Set<string>();
+        const activePalaceList = partData?.palace_list || storeState.palaceList || 'listA';
 
-        if (responses) {
+        // Tally from database rows
+        if (responses && responses.length > 0) {
           responses.forEach((row) => {
-            if (row.item_index >= 0 && row.correct && row.condition) {
-              if (timepointMap[row.phase]) {
-                activePhases.add(row.phase);
-                if (row.condition === 'palace') {
-                  timepointMap[row.phase].palace += 1;
-                } else if (row.condition === 'flashcard') {
-                  timepointMap[row.phase].flashcard += 1;
-                }
+            const phase = normalizePhase(row.phase);
+            if (!timepointStats[phase]) return;
+
+            let condition = row.condition;
+            if (!condition && row.list_id) {
+              condition = row.list_id === activePalaceList ? 'palace' : 'flashcard';
+            }
+
+            if (row.item_index >= 0) {
+              if (condition === 'palace') {
+                timepointStats[phase].palaceTargets++;
+                if (row.correct) timepointStats[phase].palaceCorrect++;
+              } else if (condition === 'flashcard') {
+                timepointStats[phase].flashcardTargets++;
+                if (row.correct) timepointStats[phase].flashcardCorrect++;
               }
-            } else if (row.phase && timepointMap[row.phase]) {
-              activePhases.add(row.phase);
             }
           });
         }
 
-        // Only include phases that were actually completed/recorded
+        // Store fallback: If DB has fewer than 20 target rows per list for immediateTest, check local store
+        if (
+          (timepointStats.immediateTest.palaceTargets < 20 || timepointStats.immediateTest.flashcardTargets < 20) &&
+          storeState.recallResults &&
+          storeState.recallResults.length > 0
+        ) {
+          for (const payload of storeState.recallResults) {
+            const phase = normalizePhase(payload.phase);
+            if (timepointStats[phase]) {
+              const condition = payload.listId === activePalaceList ? 'palace' : 'flashcard';
+              if (condition === 'palace') {
+                timepointStats[phase].palaceTargets = 20;
+                timepointStats[phase].palaceCorrect = payload.scoreResult.totalCorrect;
+              } else {
+                timepointStats[phase].flashcardTargets = 20;
+                timepointStats[phase].flashcardCorrect = payload.scoreResult.totalCorrect;
+              }
+            }
+          }
+        }
+
+        // CRUCIAL: Only accept time points where BOTH palace and flashcard have at least 20 target rows!
         const computedScores: TimepointScore[] = [];
         ['immediateTest', '24h', '7d'].forEach((p) => {
-          if (activePhases.has(p)) {
+          const stats = timepointStats[p];
+          if (stats.palaceTargets >= 20 && stats.flashcardTargets >= 20) {
             computedScores.push({
               phase: p,
-              label: timepointMap[p].label,
-              palaceCorrect: timepointMap[p].palace,
-              flashcardCorrect: timepointMap[p].flashcard,
+              label: stats.label,
+              palaceCorrect: stats.palaceCorrect,
+              flashcardCorrect: stats.flashcardCorrect,
             });
           }
         });
@@ -127,6 +174,33 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
         <p className="lead-text">
           Retrieving your word recall records from the database.
         </p>
+      </div>
+    );
+  }
+
+  // Requirement: Do not show a chart of zeros when fewer than 20 target rows per list exist.
+  // Show "We could not load your results" instead.
+  if (scores.length === 0) {
+    return (
+      <div className="card" role="region" aria-label="Results Unavailable">
+        <span className="badge" style={{ backgroundColor: 'var(--color-warning)', color: '#fff' }}>
+          Data Incomplete
+        </span>
+        <h2 className="title-lg" style={{ marginTop: 'var(--space-3)' }}>
+          We could not load your results
+        </h2>
+        <p className="lead-text">
+          Fewer than 20 target rows per list exist in your session record. Both the 3D memory palace and digital flashcards require complete 20-word test records to display verified recall scores.
+        </p>
+        <div className="button-bar">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => window.location.reload()}
+          >
+            🔄 Refresh & Retry
+          </button>
+        </div>
       </div>
     );
   }

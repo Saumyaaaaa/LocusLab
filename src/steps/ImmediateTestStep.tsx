@@ -1,7 +1,7 @@
 // Immediate recall step administering counterbalanced free recall tests for both lists and saving per-item rows to Supabase.
 import React, { useState } from 'react';
 import { useExperimentStore } from '../store/useExperimentStore';
-import { LIST_A, LIST_B } from '../data/lists';
+import { LIST_A, LIST_B, WordItem } from '../data/lists';
 import { RecallTest, RecallCompletionPayload } from '../components/RecallTest';
 import { formatListRecallRows, saveResponsesWithRetry } from '../lib/responseQueue';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -28,26 +28,102 @@ export const ImmediateTestStep: React.FC = () => {
 
   const [currentTestList, setCurrentTestList] = useState<'A' | 'B'>(firstList);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingSave, setPendingSave] = useState<{
+    payload: RecallCompletionPayload;
+    targetWordList: readonly WordItem[];
+    condition: 'palace' | 'flashcard';
+    isFirstList: boolean;
+  } | null>(null);
+
+  const finalizeImmediateSession = async () => {
+    const nowIso = new Date().toISOString();
+    const { setSessionCompletedAt } = useExperimentStore.getState();
+    setSessionCompletedAt(nowIso);
+
+    if (participantId && isSupabaseConfigured) {
+      const devInfo = detectDeviceInfo();
+      const updatePayload: Record<string, unknown> = {
+        palace_mode: palaceMode || 'guided',
+        tutorial_ms: tutorialDurationMs || 0,
+        webgl_fallback: webglFallbackUsed,
+        palace_asset_fallback: palaceAssetFallbackUsed,
+        viewport_w: devInfo.viewport_w,
+        viewport_h: devInfo.viewport_h,
+        device_class: devInfo.device_class,
+        input_type: devInfo.input_type,
+        flashcard_tab_hidden: Boolean(
+          tabHiddenByPhase['studyFirst_flashcards'] || tabHiddenByPhase['studySecond_flashcards']
+        ),
+        palace_tab_hidden: Boolean(
+          tabHiddenByPhase['studyFirst_palace'] || tabHiddenByPhase['studySecond_palace']
+        ),
+        study_completed_at: nowIso,
+        session_completed_at: nowIso,
+      };
+
+      const { error: updateError } = await supabase
+        .from('participants')
+        .update(updatePayload)
+        .eq('id', participantId);
+
+      if (
+        updateError &&
+        (updateError.message.includes('column') || updateError.message.includes('schema cache'))
+      ) {
+        const {
+          viewport_w: _vw,
+          viewport_h: _vh,
+          device_class: _dc,
+          input_type: _it,
+          palace_asset_fallback: _paf,
+          ...baseUpdate
+        } = updatePayload;
+        await supabase.from('participants').update(baseUpdate).eq('id', participantId);
+      }
+
+      await supabase
+        .from('sessions')
+        .upsert(
+          {
+            participant_id: participantId,
+            phase: 'immediateTest',
+            completed_at: nowIso,
+            start_hour: new Date().getHours(),
+            late: false,
+            lists_completed: 2,
+          },
+          { onConflict: 'participant_id,phase' }
+        );
+    }
+  };
 
   const handleTestComplete = async (payload: RecallCompletionPayload) => {
     recordRecallCompletion(payload);
     setPhaseTabHidden(`immediateTest_${payload.listId}`, payload.tabHidden);
 
-    // Determine condition for this list ('palace' or 'flashcard')
     const condition: 'palace' | 'flashcard' =
       payload.listId === palaceList ? 'palace' : 'flashcard';
     const targetWordList = payload.listId === 'listA' ? LIST_A : LIST_B;
+    const isFirst = currentTestList === firstList;
 
-    // Save formatted 20 target rows + intrusions to Supabase
     if (participantId && isSupabaseConfigured) {
       setSaveStatus('saving');
+      setSaveError(null);
       const rows = formatListRecallRows(payload, targetWordList, participantId, condition);
       const res = await saveResponsesWithRetry(rows);
-      setSaveStatus(res.success ? 'saved' : 'error');
+
+      if (!res.success) {
+        setSaveStatus('error');
+        setSaveError(res.error || 'Network error saving responses to database.');
+        setPendingSave({ payload, targetWordList, condition, isFirstList: isFirst });
+        // CRITICAL: Stop here! Never clear state or advance before save resolves!
+        return;
+      }
+      setSaveStatus('saved');
     }
 
-    if (currentTestList === firstList) {
-      // Record partial test progress (lists_completed = 1)
+    if (isFirst) {
       if (participantId && isSupabaseConfigured) {
         await supabase
           .from('sessions')
@@ -62,57 +138,55 @@ export const ImmediateTestStep: React.FC = () => {
             { onConflict: 'participant_id,phase' }
           );
       }
-      // Advance to second list
       setCurrentTestList(secondList);
     } else {
-      // Both tests completed! Record study & session completion metrics in Supabase and store
-      const nowIso = new Date().toISOString();
-      const { setSessionCompletedAt } = useExperimentStore.getState();
-      setSessionCompletedAt(nowIso);
+      await finalizeImmediateSession();
+      nextStep();
+    }
+  };
 
-      if (participantId && isSupabaseConfigured) {
-        // Trigger public.set_session_completed_at() sets authoritative server now()
-        const devInfo = detectDeviceInfo();
-        const updatePayload: Record<string, unknown> = {
-          palace_mode: palaceMode || 'guided',
-          tutorial_ms: tutorialDurationMs || 0,
-          webgl_fallback: webglFallbackUsed,
-          palace_asset_fallback: palaceAssetFallbackUsed,
-          viewport_w: devInfo.viewport_w,
-          viewport_h: devInfo.viewport_h,
-          device_class: devInfo.device_class,
-          input_type: devInfo.input_type,
-          flashcard_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_flashcards'] || tabHiddenByPhase['studySecond_flashcards']),
-          palace_tab_hidden: Boolean(tabHiddenByPhase['studyFirst_palace'] || tabHiddenByPhase['studySecond_palace']),
-          study_completed_at: nowIso,
-          session_completed_at: nowIso,
-        };
+  const handleRetrySave = async () => {
+    if (!pendingSave || !participantId) return;
+    setSaveStatus('saving');
+    setSaveError(null);
 
-        const { error: updateError } = await supabase
-          .from('participants')
-          .update(updatePayload)
-          .eq('id', participantId);
+    const rows = formatListRecallRows(
+      pendingSave.payload,
+      pendingSave.targetWordList,
+      participantId,
+      pendingSave.condition
+    );
+    const res = await saveResponsesWithRetry(rows);
 
-        if (updateError && (updateError.message.includes('column') || updateError.message.includes('schema cache'))) {
-          const { viewport_w: _vw, viewport_h: _vh, device_class: _dc, input_type: _it, palace_asset_fallback: _paf, ...baseUpdate } = updatePayload;
-          await supabase.from('participants').update(baseUpdate).eq('id', participantId);
-        }
+    if (!res.success) {
+      setSaveStatus('error');
+      setSaveError(res.error || 'Retry failed. Please check internet connection.');
+      return;
+    }
 
-        // Record immediateTest completion in sessions table with lists_completed = 2
+    setSaveStatus('saved');
+    setSaveError(null);
+    const wasFirst = pendingSave.isFirstList;
+    setPendingSave(null);
+
+    if (wasFirst) {
+      if (isSupabaseConfigured) {
         await supabase
           .from('sessions')
           .upsert(
             {
               participant_id: participantId,
               phase: 'immediateTest',
-              completed_at: nowIso,
               start_hour: new Date().getHours(),
               late: false,
-              lists_completed: 2,
+              lists_completed: 1,
             },
             { onConflict: 'participant_id,phase' }
           );
       }
+      setCurrentTestList(secondList);
+    } else {
+      await finalizeImmediateSession();
       nextStep();
     }
   };
@@ -134,9 +208,34 @@ export const ImmediateTestStep: React.FC = () => {
           ✓ Responses saved
         </div>
       )}
-      {saveStatus === 'error' && (
-        <div style={{ textAlign: 'center', fontSize: 'var(--font-size-xs)', color: 'var(--color-warning)', marginBottom: 'var(--space-2)' }}>
-          ⚠️ Responses saved locally (will retry sync)
+      {saveError && (
+        <div
+          role="alert"
+          style={{
+            backgroundColor: '#fef2f2',
+            border: '2px solid #ef4444',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-4)',
+            marginBottom: 'var(--space-4)',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontWeight: 800, color: '#991b1b', marginBottom: 'var(--space-1)' }}>
+            ⚠️ Save Failed: Could Not Reach Database
+          </div>
+          <p style={{ fontSize: 'var(--font-size-sm)', color: '#7f1d1d', marginBottom: 'var(--space-3)' }}>
+            {saveError}. <strong>Your typed answers have been safely preserved in this browser.</strong> Please check your connection and click Retry below.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleRetrySave}
+              disabled={saveStatus === 'saving'}
+            >
+              {saveStatus === 'saving' ? 'Saving...' : '🔄 Retry Saving Responses'}
+            </button>
+          </div>
         </div>
       )}
 

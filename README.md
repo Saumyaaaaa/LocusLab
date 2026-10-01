@@ -188,15 +188,18 @@ All data tables (`participants`, `sessions`, `responses`) are guarded with stric
 ### `responses` Table
 - `id` (uuid, PK): Response entry UUID.
 - `participant_id` (uuid, FK $\to$ participants.id, Cascade Delete).
-- `phase` (text): `'immediateTest'`, `'24h'`, or `'7d'`.
-- `list_id` (text): `'listA'` or `'listB'`.
-- `condition` (text): `'palace'` or `'flashcard'`.
-- `item_index` (int): 0 through 19 for target stimuli words; `-1` for intrusions/unmatched entries.
-- `typed_answer` (text, nullable): Exact typed text (null if word was missed).
+- `phase` (text): Canonical study phase normalized at source (`'immediateTest'`, `'24h'`, or `'7d'`).
+- `list_id` (text): Stimulus list identifier (`'listA'` or `'listB'`).
+- `condition` (text): Method condition (`'palace'` or `'flashcard'`).
+- `item_index` (int): `0` through `19` for the 20 target stimuli words; `-1` for intrusions/unmatched entries.
+- `typed_answer` (text, nullable): Exact typed text (null if the target word was missed).
 - `correct` (bool): `true` if recalled correctly within length-gated Levenshtein tolerance.
 - `response_ms` (int, nullable): Latency from start of list test to response submission.
 - `tab_hidden` (bool): `true` if user switched away from the browser tab during the test.
-- `intrusion_seq` (int): `0` for target stimulus rows; `1, 2, ...` for intrusions to ensure idempotent upsert without duplicates.
+- `intrusion_seq` (int): `0` for target stimulus rows; `1, 2, ...` for intrusions. Together with `(participant_id, phase, list_id, item_index, intrusion_seq)`, forms an authoritative composite unique index that guarantees idempotent upserts so network retries never duplicate rows.
+
+> [!NOTE]
+> **Token Ingestion & Multi-Response Ingestion**: During free recall tests, raw participant inputs are parsed by splitting on commas and newlines only (`/[\n,]+/`). For example, typing `"flag, rope"` or `"flag\nrope"` produces two distinct word chips/responses. Spaces do not split words, so `"flag rope"` remains a single entry. Consequently, a single user input or paste event may produce multiple recorded responses. Duplicate inputs for the same target word (e.g. typing `"flag, flag"`) are credited only once: the first match receives `correct: true`, while subsequent occurrences are evaluated as duplicates with `correct: false`.
 
 ---
 

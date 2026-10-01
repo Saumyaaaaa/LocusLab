@@ -3,15 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ShareExperimentButton } from './ShareExperimentButton';
 import { DeleteDataModal } from './DeleteDataModal';
-
-import { useExperimentStore } from '../store/useExperimentStore';
+import { PHASES, Phase, PHASE_LABELS, normalizePhase } from '../data/phases';
 
 interface ResultsViewProps {
   participantId: string;
 }
 
 interface TimepointScore {
-  phase: string;
+  phase: Phase | string;
   label: string;
   palaceCorrect: number;
   flashcardCorrect: number;
@@ -24,15 +23,6 @@ interface ParticipantMeta {
   flashcard_tab_hidden: boolean;
 }
 
-function normalizePhase(p: string): string {
-  if (!p) return '';
-  const lower = p.toLowerCase();
-  if (lower === 'immediate' || lower === 'immediatetest') return 'immediateTest';
-  if (lower === '24h' || lower === 'test24h') return '24h';
-  if (lower === '7d' || lower === 'test7d') return '7d';
-  return p;
-}
-
 export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
   const [loading, setLoading] = useState(true);
   const [scores, setScores] = useState<TimepointScore[]>([]);
@@ -43,8 +33,6 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
 
   useEffect(() => {
     async function loadUserResults() {
-      const storeState = useExperimentStore.getState();
-
       try {
         // 1. Fetch only this participant's own responses via strict RLS
         let responses: any[] | null = null;
@@ -85,20 +73,20 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
 
         // Tracking stats per timepoint
         const timepointStats: Record<
-          string,
+          Phase,
           { label: string; palaceTargets: number; flashcardTargets: number; palaceCorrect: number; flashcardCorrect: number }
         > = {
-          immediateTest: { label: 'Immediate', palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
-          '24h': { label: '24 Hours', palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
-          '7d': { label: '7 Days', palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
+          immediateTest: { label: PHASE_LABELS.immediateTest, palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
+          '24h': { label: PHASE_LABELS['24h'], palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
+          '7d': { label: PHASE_LABELS['7d'], palaceTargets: 0, flashcardTargets: 0, palaceCorrect: 0, flashcardCorrect: 0 },
         };
 
-        const activePalaceList = partData?.palace_list || storeState.palaceList || 'listA';
+        const activePalaceList = partData?.palace_list || 'listA';
 
-        // Tally from database rows
+        // Tally strictly from database rows
         if (responses && responses.length > 0) {
           responses.forEach((row) => {
-            const phase = normalizePhase(row.phase);
+            const phase = normalizePhase(row.phase) as Phase;
             if (!timepointStats[phase]) return;
 
             let condition = row.condition;
@@ -118,30 +106,9 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
           });
         }
 
-        // Store fallback: If DB has fewer than 20 target rows per list for immediateTest, check local store
-        if (
-          (timepointStats.immediateTest.palaceTargets < 20 || timepointStats.immediateTest.flashcardTargets < 20) &&
-          storeState.recallResults &&
-          storeState.recallResults.length > 0
-        ) {
-          for (const payload of storeState.recallResults) {
-            const phase = normalizePhase(payload.phase);
-            if (timepointStats[phase]) {
-              const condition = payload.listId === activePalaceList ? 'palace' : 'flashcard';
-              if (condition === 'palace') {
-                timepointStats[phase].palaceTargets = 20;
-                timepointStats[phase].palaceCorrect = payload.scoreResult.totalCorrect;
-              } else {
-                timepointStats[phase].flashcardTargets = 20;
-                timepointStats[phase].flashcardCorrect = payload.scoreResult.totalCorrect;
-              }
-            }
-          }
-        }
-
-        // CRUCIAL: Only accept time points where BOTH palace and flashcard have at least 20 target rows!
+        // CRUCIAL: Only accept time points where BOTH palace and flashcard have at least 20 target rows in Supabase!
         const computedScores: TimepointScore[] = [];
-        ['immediateTest', '24h', '7d'].forEach((p) => {
+        PHASES.forEach((p) => {
           const stats = timepointStats[p];
           if (stats.palaceTargets >= 20 && stats.flashcardTargets >= 20) {
             computedScores.push({
@@ -178,29 +145,11 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ participantId }) => {
     );
   }
 
-  // Requirement: Do not show a chart of zeros when fewer than 20 target rows per list exist.
-  // Show "We could not load your results" instead.
+  // Requirement: If rows are missing, show "We could not load your results" and nothing else.
   if (scores.length === 0) {
     return (
       <div className="card" role="region" aria-label="Results Unavailable">
-        <span className="badge" style={{ backgroundColor: 'var(--color-warning)', color: '#fff' }}>
-          Data Incomplete
-        </span>
-        <h2 className="title-lg" style={{ marginTop: 'var(--space-3)' }}>
-          We could not load your results
-        </h2>
-        <p className="lead-text">
-          Fewer than 20 target rows per list exist in your session record. Both the 3D memory palace and digital flashcards require complete 20-word test records to display verified recall scores.
-        </p>
-        <div className="button-bar">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => window.location.reload()}
-          >
-            🔄 Refresh & Retry
-          </button>
-        </div>
+        <h2 className="title-lg">We could not load your results</h2>
       </div>
     );
   }

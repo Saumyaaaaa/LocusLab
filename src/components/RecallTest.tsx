@@ -1,8 +1,8 @@
-// Free recall test component with paste prevention, removable word chips, 2-minute timer, inactivity prompt, and early submit button.
 import React, { useState, useRef, useEffect } from 'react';
 import { WordItem } from '../data/lists';
 import { useTimestampTimer } from '../hooks/useTimestampTimer';
 import { scoreRecallResponses, RecallScoreResult, ItemEvaluation } from '../lib/scoring';
+import type { Phase } from '../data/phases';
 
 export interface RecordedRecallResponse {
   typed: string;
@@ -12,7 +12,7 @@ export interface RecordedRecallResponse {
 
 export interface RecallCompletionPayload {
   listId: string;
-  phase: string;
+  phase: Phase | string;
   enteredWords: string[];
   recordedResponses: RecordedRecallResponse[];
   scoreResult: RecallScoreResult;
@@ -22,11 +22,24 @@ export interface RecallCompletionPayload {
 
 interface RecallTestProps {
   listId: string;
-  phase: string;
+  phase: Phase | string;
   targetWords: readonly WordItem[];
   title?: string;
   durationSeconds?: number; // 120 seconds (2 minutes)
   onComplete: (payload: RecallCompletionPayload) => void;
+}
+
+/**
+ * Splits raw recall input on commas and newlines only.
+ * Spaces do NOT split tokens (e.g. "flag rope" -> ["flag rope"], "flag, rope" -> ["flag", "rope"]).
+ */
+export function parseRecallInput(raw: string): string[] {
+  const clean = raw.trim();
+  if (!clean) return [];
+  return clean
+    .split(/[\n,]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
 }
 
 export const RecallTest: React.FC<RecallTestProps> = ({
@@ -56,22 +69,13 @@ export const RecallTest: React.FC<RecallTestProps> = ({
     submittedRef.current = true;
 
     const list = [...currentList];
-    const trimmedInput = finalText.trim();
-    if (trimmedInput) {
-      const tokens = trimmedInput.split(/[\n,]+/).map((t) => t.trim()).filter(Boolean);
-      if (tokens.length > 1) {
-        for (const token of tokens) {
-          list.push({
-            typed: token,
-            responseMs: Math.max(0, Date.now() - startTimeRef.current),
-          });
-        }
-      } else {
-        list.push({
-          typed: trimmedInput,
-          responseMs: Math.max(0, Date.now() - startTimeRef.current),
-        });
-      }
+    const tokens = parseRecallInput(finalText);
+    const nowMs = Math.max(0, Date.now() - startTimeRef.current);
+    for (const token of tokens) {
+      list.push({
+        typed: token,
+        responseMs: nowMs,
+      });
     }
 
     const typedStrings = list.map((item) => item.typed);
@@ -122,15 +126,16 @@ export const RecallTest: React.FC<RecallTestProps> = ({
 
   const handleAddWord = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const clean = inputText.trim();
-    if (!clean) return;
+    const tokens = parseRecallInput(inputText);
+    if (tokens.length === 0) return;
 
-    const newResponse: RecordedRecallResponse = {
-      typed: clean,
-      responseMs: Math.max(0, Date.now() - startTimeRef.current),
-    };
+    const nowMs = Math.max(0, Date.now() - startTimeRef.current);
+    const newResponses: RecordedRecallResponse[] = tokens.map((token) => ({
+      typed: token,
+      responseMs: nowMs,
+    }));
 
-    setRecordedList((prev) => [...prev, newResponse]);
+    setRecordedList((prev) => [...prev, ...newResponses]);
     setInputText('');
     lastEntryTimeRef.current = Date.now();
     setShowInactivityPrompt(false);

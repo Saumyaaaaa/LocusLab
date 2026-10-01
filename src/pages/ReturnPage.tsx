@@ -14,6 +14,7 @@ import {
 import { downloadCalendarReminder } from '../lib/calendarReminder';
 import { ResultsView } from '../components/ResultsView';
 import { DeleteDataModal } from '../components/DeleteDataModal';
+import type { Phase } from '../data/phases';
 
 interface ParticipantRecord {
   id: string;
@@ -28,7 +29,7 @@ interface ParticipantRecord {
 
 interface SessionRecord {
   id: string;
-  phase: string;
+  phase: Phase | string;
   started_at: string;
   completed_at: string | null;
   late: boolean;

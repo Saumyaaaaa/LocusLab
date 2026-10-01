@@ -120,8 +120,8 @@ def run_statistical_tests(scores_df: pd.DataFrame, label_prefix: str = ""):
     print(f"           {header}           ")
     print("=" * 60)
 
-    phases = ["immediateTest", "test24h", "test7d"]
-    phase_labels = {"immediateTest": "Immediate", "test24h": "24 Hours", "test7d": "7 Days"}
+    phases = ["immediateTest", "24h", "7d"]
+    phase_labels = {"immediateTest": "Immediate", "24h": "24 Hours", "7d": "7 Days"}
 
     for phase in phases:
         sub = scores_df[scores_df["phase"] == phase]
@@ -165,7 +165,7 @@ def run_subgroup_analyses(scores_df: pd.DataFrame):
         for duration, group in scores_df.groupby("study_seconds"):
             dur_min = round(duration / 60)
             print(f"\n[Duration: {dur_min} min ({duration}s)]")
-            for phase in ["immediateTest", "test24h", "test7d"]:
+            for phase in ["immediateTest", "24h", "7d"]:
                 sub = group[group["phase"] == phase]
                 piv = sub.pivot_table(index="participant_id", columns="condition", values="score").dropna(subset=["Palace", "Flashcard"])
                 if len(piv) > 0:
@@ -178,7 +178,7 @@ def run_subgroup_analyses(scores_df: pd.DataFrame):
         for freewalk_used, group in scores_df.groupby("palace_used_freewalk"):
             mode_str = "Used Free-Walk" if freewalk_used else "Guided Only"
             print(f"\n[{mode_str}]")
-            for phase in ["immediateTest", "test24h"]:
+            for phase in ["immediateTest", "24h"]:
                 sub = group[group["phase"] == phase]
                 piv = sub.pivot_table(index="participant_id", columns="condition", values="score").dropna(subset=["Palace", "Flashcard"])
                 if len(piv) > 0:

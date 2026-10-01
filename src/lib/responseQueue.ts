@@ -2,6 +2,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { WordItem } from '../data/lists';
 import { RecallCompletionPayload } from '../components/RecallTest';
+import { normalizePhase } from '../data/phases';
 
 export interface FormattedResponseRow {
   participant_id: string;
@@ -49,7 +50,7 @@ export function formatListRecallRows(
   }
 
   // Normalize phase name for consistency (e.g. 'immediate' -> 'immediateTest')
-  const normalizedPhase = payload.phase === 'immediate' ? 'immediateTest' : payload.phase;
+  const normalizedPhase = normalizePhase(payload.phase);
 
   // 1. Exactly 20 rows for the 20 target stimuli words
   targetList.forEach((item, index) => {
@@ -106,7 +107,8 @@ export function formatListRecallRows(
 
 /**
  * Saves rows to Supabase via idempotent upsert with automatic retry on failure.
- * If composite unique constraint is missing in remote DB, gracefully falls back to insert.
+ * Retries are fully idempotent using the composite key (participant_id, phase, list_id, item_index, intrusion_seq).
+ * If the composite upsert fails (e.g. missing database constraint index), logs the error and surfaces it clearly.
  */
 export async function saveResponsesWithRetry(
   rows: FormattedResponseRow[],
@@ -126,35 +128,27 @@ export async function saveResponsesWithRetry(
         return { success: true };
       }
 
-      // If constraint error (e.g. index not yet created in remote database), try fallback upsert without intrusion_seq
-      if (error.message && (error.message.includes('constraint') || error.message.includes('ON CONFLICT'))) {
-        const targetRows = rows.filter((r) => r.item_index >= 0);
-        const intrusionRows = rows.filter((r) => r.item_index === -1);
-
-        const { error: targetErr } = await supabase
-          .from('responses')
-          .upsert(targetRows, { onConflict: 'participant_id,phase,list_id,item_index' });
-
-        if (!targetErr) {
-          if (intrusionRows.length > 0) {
-            await supabase.from('responses').insert(intrusionRows);
-          }
-          return { success: true };
-        }
-      }
+      console.error(
+        `[saveResponsesWithRetry] Upsert failed (attempt ${attempt + 1}/${maxRetries}):`,
+        error.message
+      );
 
       attempt++;
       if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, attempt * 1200));
       } else {
-        return { success: false, error: error.message };
+        return {
+          success: false,
+          error: `Failed to save responses: ${error.message}`,
+        };
       }
     } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Network error during save';
+      console.error(`[saveResponsesWithRetry] Exception (attempt ${attempt + 1}/${maxRetries}):`, msg);
       attempt++;
       if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, attempt * 1200));
       } else {
-        const msg = err instanceof Error ? err.message : 'Network error during save';
         return { success: false, error: msg };
       }
     }
